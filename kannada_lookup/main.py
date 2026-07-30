@@ -13,13 +13,12 @@ import threading
 from pathlib import Path
 from tempfile import gettempdir
 
-from pynput import keyboard
 from PySide6.QtCore import QLockFile, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-from . import capture, config
-from .hook import XButtonHook
+from . import capture, config, hotkeys
+from .hook import KeyComboHook, XButtonHook
 from .popup import LookupPopup
 from .translator import LookupFailed, make_provider
 
@@ -27,8 +26,10 @@ from .translator import LookupFailed, make_provider
 class Bridge(QObject):
     """Signals crossing from listener/worker threads into the GUI thread."""
 
-    triggered = Signal()                 # XButton2 pressed (hook thread)
-    toggle_requested = Signal()          # hotkey pressed (hotkey thread)
+    # Payload is the tuple of virtual-key codes the user is still holding
+    # (empty for the mouse button, the shortcut's key for the hotkey).
+    triggered = Signal(object)           # lookup requested (hook thread)
+    toggle_requested = Signal()          # toggle shortcut (hook thread)
     lookup_done = Signal(object)         # LookupResult (worker thread)
     lookup_failed = Signal(str)          # message (worker thread)
 
@@ -74,14 +75,55 @@ class App:
 
         self._build_tray()
 
-        self.hook = XButtonHook(self.bridge.triggered.emit, self.enabled)
+        self.hook = XButtonHook(
+            lambda: self.bridge.triggered.emit(()), self.enabled
+        )
         self.hook.start()
 
-        # Global toggle hotkey — works even when the tray is out of reach.
-        self.hotkeys = keyboard.GlobalHotKeys(
-            {config.TOGGLE_HOTKEY: self.bridge.toggle_requested.emit}
-        )
-        self.hotkeys.start()
+        # Keyboard shortcuts go through the same suppressing hook as the
+        # mouse button, so the chord never reaches the focused app. Both
+        # are optional and rebuilt in place when the user changes them.
+        self.lookup_hook = None
+        self.toggle_hook = None
+        self._install_shortcuts()
+
+    # --- keyboard shortcuts ----------------------------------------------
+
+    def _install_shortcuts(self):
+        """(Re)bind the lookup and toggle shortcuts from current config.
+
+        Called at startup and again after the recorder saves, so changing
+        a shortcut takes effect without restarting the app.
+        """
+        for attr in ("lookup_hook", "toggle_hook"):
+            existing = getattr(self, attr, None)
+            if existing is not None:
+                try:
+                    existing.stop()
+                except Exception:
+                    pass  # a listener that never started can't be stopped
+                setattr(self, attr, None)
+
+        lookup = hotkeys.parse(config.LOOKUP_HOTKEY)
+        if lookup is not None:
+            self.lookup_hook = KeyComboHook(
+                lookup,
+                # The shortcut's own key is still held when this fires;
+                # pass it along so the copy chord isn't polluted.
+                lambda vk=lookup.vk: self.bridge.triggered.emit((vk,)),
+                self.enabled,
+            )
+            self.lookup_hook.start()
+
+        toggle = hotkeys.parse(config.TOGGLE_HOTKEY)
+        if toggle is not None:
+            self.toggle_hook = KeyComboHook(
+                toggle,
+                self.bridge.toggle_requested.emit,
+                self.enabled,
+                always_on=True,  # must work while the tool is OFF
+            )
+            self.toggle_hook.start()
 
     # --- tray -----------------------------------------------------------
 
@@ -93,12 +135,14 @@ class App:
         self.enabled_action.triggered.connect(self._toggle)
         menu.addAction(self.enabled_action)
 
-        hotkey_hint = QAction(
-            f"Toggle hotkey: {config.TOGGLE_HOTKEY.replace('<', '').replace('>', '')}",
-            menu,
-        )
-        hotkey_hint.setEnabled(False)
-        menu.addAction(hotkey_hint)
+        self.hotkey_hint = QAction("", menu)
+        self.hotkey_hint.setEnabled(False)
+        menu.addAction(self.hotkey_hint)
+        self._sync_hotkey_hint()
+
+        shortcuts_action = QAction("Change shortcuts…", menu)
+        shortcuts_action.triggered.connect(self._change_shortcuts)
+        menu.addAction(shortcuts_action)
 
         register_action = QAction("Open word register", menu)
         register_action.triggered.connect(self._open_register)
@@ -121,6 +165,25 @@ class App:
             f"{config.TARGET_LANGUAGE} Lookup — {'ON' if on else 'OFF'}"
         )
         self.enabled_action.setChecked(on)
+
+    def _sync_hotkey_hint(self):
+        """Tray line showing the current bindings. The lookup shortcut is
+        optional, so say so rather than showing a blank."""
+        lookup = config.LOOKUP_HOTKEY or "not set (mouse Forward button)"
+        self.hotkey_hint.setText(
+            f"Lookup: {lookup}   •   Toggle: {config.TOGGLE_HOTKEY}"
+        )
+
+    def _change_shortcuts(self):
+        """Open the recorder so shortcuts can be changed after first run —
+        without this, an existing install could never reach the dialog,
+        since it only appears when settings.json is missing."""
+        from .setup_dialog import ShortcutDialog
+
+        if ShortcutDialog().exec():
+            self._install_shortcuts()
+            self._sync_hotkey_hint()
+            self.popup.show_message("Shortcuts updated")
 
     def _open_register(self):
         """Regenerate the HTML word register and open it in the browser."""
@@ -146,17 +209,19 @@ class App:
 
     # --- lookup flow ------------------------------------------------------
 
-    def _on_trigger(self):
+    def _on_trigger(self, release_vks=()):
         if self._busy:
             return  # one lookup at a time
         self._busy = True
         self.popup.show_loading()
-        threading.Thread(target=self._worker, daemon=True).start()
+        threading.Thread(
+            target=self._worker, args=(release_vks,), daemon=True
+        ).start()
 
-    def _worker(self):
+    def _worker(self, release_vks=()):
         """Blocking part: clipboard round-trip + API call. Worker thread."""
         try:
-            text = capture.grab_selection()
+            text = capture.grab_selection(release_vks)
             if not text:
                 self.bridge.lookup_failed.emit("No text selected")
                 return
@@ -181,7 +246,9 @@ class App:
 
     def _quit(self):
         self.hook.stop()
-        self.hotkeys.stop()
+        for hook in (self.lookup_hook, self.toggle_hook):
+            if hook is not None:
+                hook.stop()
         self.tray.hide()
         self.qapp.quit()
 

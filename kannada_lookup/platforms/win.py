@@ -11,10 +11,12 @@ swallow it there (listener.suppress_event()).
 
 import time
 
+import win32api
 import win32clipboard
-from pynput.keyboard import Controller, Key
+from pynput.keyboard import Controller, Key, KeyCode
 
 SUPPRESSES_CLICK = True
+SUPPRESSES_HOTKEY = True
 
 _kbd = Controller()
 
@@ -56,12 +58,23 @@ def change_token():
     return win32clipboard.GetClipboardSequenceNumber()
 
 
-def send_copy():
+def send_copy(release_vks=()):
     # Neutralise modifiers the user may be physically holding (Shift+select
     # is common; Ctrl+Shift+C would open devtools in a browser). Synthetic
     # key-ups are harmless if the key isn't held.
-    for mod in (Key.shift, Key.shift_r, Key.alt):
+    for mod in (Key.shift, Key.shift_r, Key.alt, Key.alt_r):
         _kbd.release(mod)
+
+    # When the trigger was a keyboard shortcut, its own keys are still
+    # physically down — sending Ctrl+C on top of a held "G" makes the app
+    # see Ctrl+G. Release them first. Callers on the mouse path pass
+    # nothing and this loop is a no-op.
+    for vk in release_vks:
+        try:
+            _kbd.release(KeyCode.from_vk(vk))
+        except Exception:
+            pass  # unmappable vk — the Ctrl+C below is still worth trying
+
     _kbd.press(Key.ctrl)
     _kbd.press("c")
     _kbd.release("c")
@@ -96,4 +109,73 @@ def make_listener(on_down, enabled):
         listener.suppress_event()
 
     listener = mouse.Listener(win32_event_filter=_filter)
+    return listener
+
+
+def make_key_listener(combo, on_trigger, enabled):
+    """pynput keyboard.Listener that fires on_trigger() when `combo` is
+    pressed and swallows the chord so the focused app never sees it.
+
+    Suppression is the whole point. Without it the shortcut would reach
+    whatever has focus — press Ctrl+Alt+D in Word and you would get a
+    lookup AND an inserted endnote. This mirrors make_listener() above,
+    which already swallows the Forward button the same way.
+
+    Raw Windows message constants (winuser.h):
+      WM_KEYDOWN 0x0100, WM_KEYUP 0x0101
+      WM_SYSKEYDOWN 0x0104, WM_SYSKEYUP 0x0105  — any chord holding Alt
+      arrives as the SYS variants, so both pairs must be handled.
+    """
+    from pynput import keyboard
+
+    WM_KEYDOWN, WM_KEYUP = 0x0100, 0x0101
+    WM_SYSKEYDOWN, WM_SYSKEYUP = 0x0104, 0x0105
+    VK_SHIFT, VK_CONTROL, VK_MENU = 0x10, 0x11, 0x12
+    VK_LWIN, VK_RWIN = 0x5B, 0x5C
+
+    listener = None  # bound below; filter only runs after start()
+    # Whether we swallowed the key-down of the chord currently held. The
+    # matching key-up must be swallowed too: a suppressed down followed by
+    # a delivered up leaves the app with a dangling release, which some
+    # apps treat as a bare keypress.
+    swallowed = {"down": False}
+
+    def _down(vk):
+        return win32api.GetAsyncKeyState(vk) < 0  # high bit = held now
+
+    def _modifiers_match():
+        return (
+            _down(VK_CONTROL) == combo.ctrl
+            and _down(VK_MENU) == combo.alt
+            and _down(VK_SHIFT) == combo.shift
+            and (_down(VK_LWIN) or _down(VK_RWIN)) == combo.meta
+        )
+
+    def _filter(msg, data):
+        if data.vkCode != combo.vk:
+            return True  # different key entirely — let it through
+
+        if msg in (WM_KEYDOWN, WM_SYSKEYDOWN):
+            if not enabled.is_set() or not _modifiers_match():
+                return True  # tool OFF, or wrong modifiers — not our chord
+            if not swallowed["down"]:
+                # Guard against key-repeat: holding the chord must not
+                # queue a lookup per repeat. Callback BEFORE
+                # suppress_event, which raises internally to abort the
+                # event, so nothing after it runs. Must be non-blocking.
+                swallowed["down"] = True
+                on_trigger()
+            listener.suppress_event()
+
+        elif msg in (WM_KEYUP, WM_SYSKEYUP):
+            # Match on our own bookkeeping, not on modifier state — by the
+            # time the key comes up the user has often already let go of
+            # Ctrl/Alt, so _modifiers_match() would be False here.
+            if swallowed["down"]:
+                swallowed["down"] = False
+                listener.suppress_event()
+
+        return True
+
+    listener = keyboard.Listener(win32_event_filter=_filter)
     return listener
