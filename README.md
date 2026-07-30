@@ -20,14 +20,25 @@ The first time you launch, a one-time setup dialog appears:
 1. **Pick your target language** from the dropdown (Kannada, Hindi, Tamil, Spanish, French, Japanese, … 25 total).
 2. **Paste a Gemini API key** if `.env` doesn't have one yet.
 
-Both are saved (`data/settings.json` + `.env`) — the dialog never appears again unless you delete `data/settings.json`.
+Both are saved (`data/settings.json` + `.env`) — the dialog never appears again unless you delete `data/settings.json`. Running from source, those live in the project folder; running the .exe, they live in `%LOCALAPPDATA%\WordLookup\`.
 
-## Setup
+Your key is yours: it is written to a local `.env` that is gitignored and never leaves your machine.
+
+## Install
+
+### Option A — download the .exe (no Python needed)
+
+Grab `WordLookup.exe` from the [**Releases**](https://github.com/Harishprc/word-lookup/releases/latest) page and run it. Settings, your API key and the word register are stored in `%LOCALAPPDATA%\WordLookup\`.
+
+> **Expect a SmartScreen warning.** The build is unsigned (code-signing certificates cost money), and it installs a global low-level mouse hook — a combination antivirus heuristics dislike. Click *More info → Run anyway*, or use Option B if you'd rather run code you can read. Every line of the source is in this repo, and the workflow that builds the exe is in [`.github/workflows/release.yml`](.github/workflows/release.yml).
+
+### Option B — run from source (recommended)
 
 Requires Python 3.10+.
 
 ```powershell
-cd "H:\Claude Project Files\Mouse automation project 1"
+git clone https://github.com/Harishprc/word-lookup.git
+cd word-lookup
 python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
 ```
@@ -104,7 +115,7 @@ Run with `python -m kannada_lookup` (no `.pyw` outside Windows).
 
 - **Dictionary dataset import:** a proper word→definition source (not a PDF thesaurus) for the offline layer.
 - **Paid LLM provider:** Claude/GPT via the same `TranslationProvider` ABC, for when data-privacy (no training on prompts) matters.
-- **Packaging:** PyInstaller single-exe, installer.
+- **Packaging:** single-exe is done (see Releases); a signed installer is not — needs a paid code-signing certificate.
 - **Android:** separate app (this codebase can't run on Android) — floating-bubble lookup via `ACTION_PROCESS_TEXT` + overlay, same Gemini prompt.
 
 ## Tests

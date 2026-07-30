@@ -1,0 +1,73 @@
+# Builds the Windows single-file exe and attaches it to a GitHub Release.
+# Cut a release with:  git tag v0.1.0 && git push origin v0.1.0
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}   # lets you test the build without cutting a tag
+
+permissions:
+  contents: write         # required to create the Release and upload the exe
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller pytest
+
+      # Gate the binary on the test suite: never ship an exe from a red build.
+      - name: Run tests
+        run: python -m pytest tests -q
+
+      # --windowed matches run.pyw's no-console behaviour (this is a tray app).
+      # pynput and pywin32 resolve their backends dynamically, so PyInstaller's
+      # static analysis misses them without these hidden imports.
+      - name: Build exe
+        run: >
+          pyinstaller --onefile --windowed --name WordLookup
+          --hidden-import pynput.mouse._win32
+          --hidden-import pynput.keyboard._win32
+          --hidden-import win32clipboard
+          --hidden-import win32con
+          run.pyw
+
+      # Smoke test: a onefile exe that fails to unpack dies instantly. We can't
+      # assert on the GUI headlessly, but we can prove the bundle imports.
+      - name: Verify the exe starts
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\WordLookup.exe -PassThru
+          Start-Sleep -Seconds 20
+          if ($p.HasExited) {
+            Write-Error "WordLookup.exe exited immediately with code $($p.ExitCode) - likely a missing hidden import."
+            exit 1
+          }
+          Stop-Process -Id $p.Id -Force
+          Write-Host "exe stayed alive - bundle loaded OK"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WordLookup-exe
+          path: dist/WordLookup.exe
+
+      - name: Publish Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/WordLookup.exe
+          generate_release_notes: true

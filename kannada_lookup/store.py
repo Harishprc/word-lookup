@@ -20,10 +20,13 @@ import sqlite3
 import time
 from pathlib import Path
 
+from .config import PROJECT_ROOT
 from .translator import LookupResult
 
-# data/ lives next to the package's parent (the project root), gitignored.
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "lookups.db"
+# data/ lives under the app root — the project root in a source checkout
+# (gitignored), or %LOCALAPPDATA%\WordLookup in a frozen .exe. See
+# config._app_root().
+DB_PATH = PROJECT_ROOT / "data" / "lookups.db"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS lookups_v2 (

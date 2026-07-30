@@ -8,14 +8,33 @@ signal.
 
 import json
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 from . import languages
 
-# .env lives in the project root (one level above this package).
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+def _app_root() -> Path:
+    """Where writable user data lives.
+
+    Source checkout: the project root (one level above this package), as
+    it has always been — .env and data/ sit next to the code.
+
+    Frozen .exe (PyInstaller onefile): __file__ points inside the temp
+    _MEIxxxx extraction dir, which is DELETED on exit — writing there
+    would lose the key, language and register on every quit. So the
+    frozen build writes to %LOCALAPPDATA%\\WordLookup instead.
+    """
+    if getattr(sys, "frozen", False):
+        base = Path(os.getenv("LOCALAPPDATA") or Path.home()) / "WordLookup"
+        base.mkdir(parents=True, exist_ok=True)
+        return base
+    return Path(__file__).resolve().parent.parent
+
+
+PROJECT_ROOT = _app_root()
 ENV_PATH = PROJECT_ROOT / ".env"
 SETTINGS_PATH = PROJECT_ROOT / "data" / "settings.json"
 load_dotenv(ENV_PATH)
