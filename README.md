@@ -2,6 +2,16 @@
 
 Select any English word or phrase in **any** app (PDF reader, Word, Slack, browser…), press the **Forward side button** on your mouse, and a small floating card near the cursor shows a mini dictionary entry: part of speech, English meaning, synonyms, an example sentence, and the translation (with its own example) **in whatever language you choose on first run** — Kannada, Hindi, Spanish, Japanese, 20+ others.
 
+## Supported languages
+
+25 target languages, picked once on first run and changeable by deleting `data/settings.json`. The tray icon becomes a native glyph of whichever you choose.
+
+**Indian languages** — Kannada (ಕ), Hindi (अ), Tamil (த), Telugu (త), Malayalam (മ), Marathi (म), Bengali (ব), Gujarati (ગ), Punjabi (ਪ), Odia (ଓ), Urdu (ا)
+
+**World languages** — Spanish (Ñ), French (Ç), German (ß), Japanese (あ), Korean (한), Chinese Simplified (中), Arabic (ع), Russian (Я), Portuguese (Ã), Italian (È), Turkish (Ş), Vietnamese (ơ), Thai (ท), Indonesian (ᬅ)
+
+The list is just a tidy dropdown — the language name is interpolated straight into the Gemini prompt, so any language the model knows works. Add your own in [`kannada_lookup/languages.py`](kannada_lookup/languages.py).
+
 ## Which mouse works
 
 Any mouse whose side buttons send the standard **Forward** (XButton2) signal — i.e. any ordinary 5-button mouse. No vendor software required; built and tested on an **ASUS MW203**, which ships with no remap utility at all, proving the point. If your mouse has no side buttons, or a gaming mouse whose extra buttons need vendor software to map, assign one of them to "Forward" first — this tool listens for that signal, not a specific piece of hardware.
