@@ -1,0 +1,23 @@
+# Secrets and personal data — never commit these.
+.env
+data/
+*.pdf
+*.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# Build output (PyInstaller)
+build/
+dist/
+*.spec
+
+# Editors / OS / shortcuts
+.vscode/
+.idea/
+*.lnk
+*.log
