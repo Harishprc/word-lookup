@@ -36,7 +36,8 @@ jobs:
 
       # --windowed matches run.pyw's no-console behaviour (this is a tray app).
       # pynput and pywin32 resolve their backends dynamically, so PyInstaller's
-      # static analysis misses them without these hidden imports.
+      # static analysis misses them without these hidden imports. win32api is
+      # needed by the keyboard hook's modifier check (GetAsyncKeyState).
       - name: Build exe
         run: >
           pyinstaller --onefile --windowed --name WordLookup
@@ -44,6 +45,7 @@ jobs:
           --hidden-import pynput.keyboard._win32
           --hidden-import win32clipboard
           --hidden-import win32con
+          --hidden-import win32api
           run.pyw
 
       # Smoke test: a onefile exe that fails to unpack dies instantly. We can't

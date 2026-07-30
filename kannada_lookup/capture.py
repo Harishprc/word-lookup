@@ -27,16 +27,21 @@ _COPY_WAIT_S = 0.6
 _POLL_S = 0.02
 
 
-def grab_selection():
+def grab_selection(release_vks=()):
     """Return the currently selected text, or None if nothing was selected.
 
     Runs on a worker thread (never the GUI thread) — it sleeps while
     polling for the copy to land.
+
+    `release_vks` are keys the user is still physically holding because
+    they triggered this with a keyboard shortcut; the backend releases
+    them before sending the copy chord so it isn't polluted. The mouse
+    path passes nothing.
     """
     original = backend.read_text()
     token_before = backend.change_token()
 
-    backend.send_copy()
+    backend.send_copy(release_vks)
 
     # Wait for the token to move — proof the target app actually wrote
     # something. Apps with nothing selected typically ignore the copy

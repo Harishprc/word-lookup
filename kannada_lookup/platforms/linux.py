@@ -15,9 +15,13 @@ False so hook.py knows not to try.
 import shutil
 import subprocess
 
-from pynput.keyboard import Controller, Key
+from pynput.keyboard import Controller, Key, KeyCode
 
 SUPPRESSES_CLICK = False
+# Same X11 limitation applies to the keyboard: GlobalHotKeys observes but
+# cannot consume, so the shortcut ALSO reaches the focused app. The
+# recorder warns the user about this when the flag is False.
+SUPPRESSES_HOTKEY = False
 
 _kbd = Controller()
 
@@ -58,9 +62,17 @@ def change_token():
     return read_text()
 
 
-def send_copy():
+def send_copy(release_vks=()):
     for mod in (Key.shift, Key.shift_r, Key.alt):
         _kbd.release(mod)
+    # Keyboard-triggered lookups leave the chord's own keys held. Note the
+    # vks here are Windows codes and X11 keysyms differ, so this is
+    # best-effort — see win.send_copy for the reasoning.
+    for vk in release_vks:
+        try:
+            _kbd.release(KeyCode.from_vk(vk))
+        except Exception:
+            pass
     _kbd.press(Key.ctrl)
     _kbd.press("c")
     _kbd.release("c")
@@ -80,3 +92,20 @@ def make_listener(on_down, enabled):
             on_down()
 
     return mouse.Listener(on_click=_on_click)
+
+
+def make_key_listener(combo, on_trigger, enabled):
+    """Observe-only hotkey listener, for the same reason as make_listener:
+    X11 delivers the chord to us AND to the focused app.
+
+    GlobalHotKeys is the right tool here precisely because suppression is
+    off the table anyway — on Windows and macOS we use a filtering hook
+    instead. SUPPRESSES_HOTKEY is False so the UI can warn about this.
+    """
+    from pynput import keyboard
+
+    def _fire():
+        if enabled.is_set():
+            on_trigger()
+
+    return keyboard.GlobalHotKeys({combo.pynput_text(): _fire})

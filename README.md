@@ -16,6 +16,17 @@ The list is just a tidy dropdown — the language name is interpolated straight 
 
 Any mouse whose side buttons send the standard **Forward** (XButton2) signal — i.e. any ordinary 5-button mouse. No vendor software required; built and tested on an **ASUS MW203**, which ships with no remap utility at all, proving the point. If your mouse has no side buttons, or a gaming mouse whose extra buttons need vendor software to map, assign one of them to "Forward" first — this tool listens for that signal, not a specific piece of hardware.
 
+## On a laptop (no Forward button)
+
+Trackpads have no side buttons, so you can bind a **keyboard shortcut** instead. You pick it yourself — there is no default, and nothing changes until you set one.
+
+- **New install:** the first-run dialog has a *Lookup shortcut* box. Click it, press the keys you want.
+- **Already installed:** tray menu → **Change shortcuts…**
+
+**The shortcut is swallowed.** On Windows and macOS the key combination is intercepted before the focused app sees it, so binding something like `Ctrl+Alt+D` will *not* also insert an endnote in Word. This is the same mechanism that stops the Forward button from navigating forward. On Linux/X11 it cannot be intercepted — see the platform notes below.
+
+The recorder warns you if you pick something with a known cost (`Ctrl+W` closes documents, `Ctrl+Q` quits apps, `Ctrl+C` is Copy) but never blocks you — it's your machine.
+
 ## How it works
 
 1. A low-level global mouse hook watches for the Forward button. While the tool is ON, the click is **swallowed** on Windows (and macOS) so the app underneath never also navigates "Forward"; X11 Linux can't suppress it — the app receives it too, documented below.
@@ -78,9 +89,13 @@ Either way a tray icon appears (a native glyph of your chosen language — ಕ, 
 | Action | Effect |
 |---|---|
 | Select text → **Forward button** | Dictionary card at cursor |
+| Select text → **your lookup shortcut** | Same, for laptops — set it yourself, see above |
 | **Ctrl+Alt+K** or tray menu → *Enabled* | Toggle ON/OFF globally |
+| Tray menu → *Change shortcuts…* | Rebind the lookup and toggle keys |
 | Tray menu → *Open word register* | Browse every word you've looked up |
 | Tray menu → *Quit* | Exit |
+
+The toggle shortcut keeps working while the tool is OFF — otherwise there'd be no way to switch it back on from the keyboard. Both shortcuts are stored in `data/settings.json`.
 
 **ON/OFF switch:** lookups only ever fire on the button press — never on selection alone. Toggle OFF when you're not reading; the Forward button then works normally again (icon turns gray).
 
@@ -119,7 +134,7 @@ All OS-specific code lives in `kannada_lookup/platforms/` (clipboard + mouse hoo
 Run with `python -m kannada_lookup` (no `.pyw` outside Windows).
 
 - **macOS:** grant the terminal/Python **Accessibility** and **Input Monitoring** permissions (System Settings → Privacy & Security), else the hook sees nothing. Copy chord is Cmd+C; Forward click is swallowed via a Quartz event tap. Autostart: wrap the command in a LaunchAgent plist under `~/Library/LaunchAgents/`.
-- **Linux:** install `xclip` (X11) or `wl-clipboard` (Wayland). **The Forward click cannot be swallowed on X11** — the app under the cursor also receives it (pynput limitation, documented in `platforms/linux.py`). Autostart: a `.desktop` file in `~/.config/autostart/`.
+- **Linux:** install `xclip` (X11) or `wl-clipboard` (Wayland). **Neither the Forward click nor the keyboard shortcut can be swallowed on X11** — the focused app receives them too (pynput limitation, documented in `platforms/linux.py`). Pick a shortcut that does nothing in the apps you read in; the recorder warns you about this on Linux. Autostart: a `.desktop` file in `~/.config/autostart/`.
 
 ## Roadmap (not built)
 
