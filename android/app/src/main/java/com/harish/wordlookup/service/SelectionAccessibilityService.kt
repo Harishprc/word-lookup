@@ -63,11 +63,7 @@ class SelectionAccessibilityService : AccessibilityService() {
         val source = event.source
         if (source?.isPassword == true) return
 
-        val start = event.fromIndex
-        val end = event.toIndex
-        if (start < 0 || end < 0 || start == end) return // caret move, not a selection
-
-        val text = extractSelection(event, source, start, end) ?: return
+        val text = extractSelection(event, source) ?: return
         if (text.isBlank()) return
 
         val now = System.currentTimeMillis()
@@ -79,24 +75,44 @@ class SelectionAccessibilityService : AccessibilityService() {
         fireLookup(TextTruncation.truncate(text), bounds.takeIf { !it.isEmpty })
     }
 
-    /** event.text first (cheap, present for most standard widgets), else
-     * fall back to reading the source node's full text and slicing by the
-     * reported selection range — WebView/Compose selections often only
-     * populate the second path. */
+    /**
+     * Two different conventions arrive on the same event type, and reading
+     * only the first is why browsers used to fall through to the menu:
+     *
+     *  - Standard widgets (TextView/EditText): `event.text` is the node's
+     *    ENTIRE text and fromIndex/toIndex delimit the selection inside it.
+     *    Returning event.text directly here would send a whole paragraph
+     *    to the API, so this case must slice.
+     *
+     *  - WebView-backed apps (Chrome, Brave, in-app browsers): the indices
+     *    come back unset (-1) and `event.text` already holds just the
+     *    selected substring. The old guard rejected the event outright on
+     *    `start < 0`, so selecting text in Brave never fired the card —
+     *    the exact "some apps still need the menu" symptom.
+     */
     private fun extractSelection(
         event: AccessibilityEvent,
         source: android.view.accessibility.AccessibilityNodeInfo?,
-        start: Int,
-        end: Int,
     ): String? {
-        val fromEvent = event.text?.joinToString("")?.takeIf { it.isNotBlank() }
-        if (fromEvent != null) return fromEvent
+        val start = event.fromIndex
+        val end = event.toIndex
+        val eventText = event.text?.joinToString("")?.takeIf { it.isNotBlank() }
+        val nodeText = source?.text?.toString()
 
-        val full = source?.text?.toString() ?: return null
-        val lo = start.coerceIn(0, full.length)
-        val hi = end.coerceIn(0, full.length)
+        if (start < 0 || end < 0) {
+            // Indices unset → WebView convention: event.text IS the
+            // selection. If it matches the node's whole text this is a
+            // focus/caret notification rather than a real selection.
+            return eventText?.takeIf { it != nodeText }
+        }
+
+        if (start == end) return null // caret moved, nothing selected
+
+        val full = eventText ?: nodeText ?: return null
+        val lo = minOf(start, end).coerceIn(0, full.length)
+        val hi = maxOf(start, end).coerceIn(0, full.length)
         if (lo == hi) return null
-        return full.substring(minOf(lo, hi), maxOf(lo, hi))
+        return full.substring(lo, hi)
     }
 
     private fun fireLookup(text: String, bounds: Rect?) {

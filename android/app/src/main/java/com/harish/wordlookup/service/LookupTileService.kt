@@ -23,7 +23,8 @@ class LookupTileService : TileService() {
 
     override fun onStartListening() {
         super.onStartListening()
-        syncTile((application as WordLookupApp).enabledState.value)
+        // StateFlow replays its current value to a new collector, so this
+        // single collect covers both the initial paint and later changes.
         collectJob = scope.launch {
             (application as WordLookupApp).enabledState.collect { syncTile(it) }
         }
@@ -37,9 +38,19 @@ class LookupTileService : TileService() {
     override fun onClick() {
         super.onClick()
         val app = application as WordLookupApp
+
+        // Paint the new state synchronously, BEFORE persisting. qsTile is
+        // only valid while the tile is in the listening window, and the
+        // DataStore write below is asynchronous — if the system stops
+        // listening first (common: the shade closes on tap), a post-write
+        // updateTile() silently no-ops and the tile looks stuck.
+        val next = !app.enabledState.value
+        syncTile(next)
+
         scope.launch {
-            val nowEnabled = app.settings.toggleEnabled()
-            syncTile(nowEnabled)
+            // Absolute set, not toggle: two fast taps would otherwise both
+            // read the same stale value and cancel each other out.
+            app.settings.setEnabled(next)
         }
     }
 

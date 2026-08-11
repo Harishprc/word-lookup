@@ -3,6 +3,7 @@ package com.harish.wordlookup.ui
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -204,6 +205,33 @@ private fun HomeScreen(
                     Text("Open App Info (for \"Allow restricted settings\")")
                 }
             }
+        }
+
+        // Without this the tile is effectively invisible: Android never
+        // places a third-party tile automatically, and nothing in the shade
+        // hints that one is available to add.
+        SectionCard(title = "Quick Settings tile") {
+            Text(
+                "Puts an on/off toggle in the notification shade.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            OutlinedButton(onClick = {
+                val asked = Permissions.requestAddTile(context) { }
+                if (!asked) {
+                    Toast.makeText(
+                        context,
+                        "Open Quick Settings → pencil (edit) → drag \"Word Lookup\" in.",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }) { Text("Add tile to Quick Settings") }
+            Text(
+                "If the dialog doesn't appear, add it by hand: open Quick " +
+                    "Settings, tap the pencil (edit), then drag \"Word Lookup\" " +
+                    "into the panel.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         SectionCard(title = "Trigger") {
