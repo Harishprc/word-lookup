@@ -17,6 +17,9 @@ from pynput.keyboard import Controller, Key, KeyCode
 
 SUPPRESSES_CLICK = True
 SUPPRESSES_HOTKEY = True
+# change_token() is an exact sequence number here — it always moves on a
+# write, content-identical or not. See mac.py/linux.py for the opposite.
+TOKEN_IS_CONTENT = False
 
 _kbd = Controller()
 
@@ -44,6 +47,11 @@ def read_text():
 
 
 def write_text(text):
+    # None means the original clipboard content couldn't be read (open
+    # failed or held nothing we understand) — leave the clipboard alone
+    # rather than emptying it out from under the user.
+    if text is None:
+        return
     if not _open_clipboard_retry():
         return
     try:
@@ -112,9 +120,12 @@ def make_listener(on_down, enabled):
     return listener
 
 
-def make_key_listener(combo, on_trigger, enabled):
-    """pynput keyboard.Listener that fires on_trigger() when `combo` is
-    pressed and swallows the chord so the focused app never sees it.
+def make_key_listener(bindings):
+    """pynput keyboard.Listener that fires on_trigger() for whichever combo
+    in `bindings` (a list of (combo, on_trigger, enabled) triples) is
+    pressed, swallowing the chord so the focused app never sees it. One
+    listener — one low-level hook — serves every bound shortcut, instead
+    of installing a separate hook per shortcut.
 
     Suppression is the whole point. Without it the shortcut would reach
     whatever has focus — press Ctrl+Alt+D in Word and you would get a
@@ -134,16 +145,16 @@ def make_key_listener(combo, on_trigger, enabled):
     VK_LWIN, VK_RWIN = 0x5B, 0x5C
 
     listener = None  # bound below; filter only runs after start()
-    # Whether we swallowed the key-down of the chord currently held. The
-    # matching key-up must be swallowed too: a suppressed down followed by
-    # a delivered up leaves the app with a dangling release, which some
-    # apps treat as a bare keypress.
-    swallowed = {"down": False}
+    # Whether we swallowed the key-down of the chord currently held, per
+    # combo (keyed by id()). The matching key-up must be swallowed too: a
+    # suppressed down followed by a delivered up leaves the app with a
+    # dangling release, which some apps treat as a bare keypress.
+    swallowed = {}
 
     def _down(vk):
         return win32api.GetAsyncKeyState(vk) < 0  # high bit = held now
 
-    def _modifiers_match():
+    def _modifiers_match(combo):
         return (
             _down(VK_CONTROL) == combo.ctrl
             and _down(VK_MENU) == combo.alt
@@ -152,28 +163,31 @@ def make_key_listener(combo, on_trigger, enabled):
         )
 
     def _filter(msg, data):
-        if data.vkCode != combo.vk:
-            return True  # different key entirely — let it through
+        for combo, on_trigger, enabled in bindings:
+            if data.vkCode != combo.vk:
+                continue  # different key entirely — not this binding
 
-        if msg in (WM_KEYDOWN, WM_SYSKEYDOWN):
-            if not enabled.is_set() or not _modifiers_match():
-                return True  # tool OFF, or wrong modifiers — not our chord
-            if not swallowed["down"]:
-                # Guard against key-repeat: holding the chord must not
-                # queue a lookup per repeat. Callback BEFORE
-                # suppress_event, which raises internally to abort the
-                # event, so nothing after it runs. Must be non-blocking.
-                swallowed["down"] = True
-                on_trigger()
-            listener.suppress_event()
-
-        elif msg in (WM_KEYUP, WM_SYSKEYUP):
-            # Match on our own bookkeeping, not on modifier state — by the
-            # time the key comes up the user has often already let go of
-            # Ctrl/Alt, so _modifiers_match() would be False here.
-            if swallowed["down"]:
-                swallowed["down"] = False
+            if msg in (WM_KEYDOWN, WM_SYSKEYDOWN):
+                if not enabled.is_set() or not _modifiers_match(combo):
+                    continue  # tool OFF, or wrong modifiers — not this one
+                if not swallowed.get(id(combo)):
+                    # Guard against key-repeat: holding the chord must not
+                    # queue a lookup per repeat. Callback BEFORE
+                    # suppress_event, which raises internally to abort the
+                    # event, so nothing after it runs. Must be non-blocking.
+                    swallowed[id(combo)] = True
+                    on_trigger()
                 listener.suppress_event()
+                return True
+
+            elif msg in (WM_KEYUP, WM_SYSKEYUP):
+                # Match on our own bookkeeping, not on modifier state — by
+                # the time the key comes up the user has often already let
+                # go of Ctrl/Alt, so _modifiers_match() would be False here.
+                if swallowed.get(id(combo)):
+                    swallowed[id(combo)] = False
+                    listener.suppress_event()
+                    return True
 
         return True
 

@@ -21,3 +21,15 @@ dist/
 .idea/
 *.lnk
 *.log
+
+# Android (android/) — keystore.properties and the .jks itself are the
+# release signing secrets (see android/app/build.gradle.kts); CI supplies
+# the same values from repo secrets instead, see .github/workflows/android.yml.
+android/.gradle/
+android/local.properties
+android/keystore.properties
+*.jks
+*.keystore
+android/**/.cxx/
+android/captures/
+android/**/*.iml

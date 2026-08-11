@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Matches the desktop tray icon (main.py's _tray_icon): a white glyph
+     on the #7c5cff circle (ic_launcher_background.xml). The tray icon
+     draws whatever language the user picked as live text via Qt's font
+     renderer (ಕ, अ, த…); a static launcher icon can't switch per-user at
+     runtime or render real font glyphs at all (VectorDrawable only
+     supports path/stroke geometry, no text). This is a hand-drawn,
+     simplified stroke approximation of ಕ (Kannada "ka", the desktop
+     app's default language) rather than a font-accurate rendering. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Main stem -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M50,28 L50,84" />
+    <!-- Top curl -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M50,28 C44,24 40,30 46,34" />
+    <!-- Top-right flick -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M50,30 L64,20" />
+    <!-- Bottom loop -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M50,54 C70,52 74,68 60,76 C52,80 44,76 48,66" />
+</vector>

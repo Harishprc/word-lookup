@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Same purple as the desktop tray icon's active state (popup.py / main.py
+     _tray_icon: #7c5cff), so the two apps read as one product. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#7C5CFF" />
+</shape>

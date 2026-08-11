@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Card gradient — matches kannada_lookup/popup.py _STYLE exactly, so
+         the phone and desktop cards look like the same product. -->
+    <color name="card_top">#FDFDFE</color>
+    <color name="card_bottom">#EDF2FB</color>
+    <color name="word_text">#1A1A1A</color>
+    <color name="pos_text">#8A8F9C</color>
+    <color name="meaning_text">#333333</color>
+    <color name="synonyms_text">#6A6A6A</color>
+    <color name="divider">#E2E7F0</color>
+    <color name="translation_text">#111111</color>
+    <color name="example_text">#555555</color>
+    <color name="accent">#7C5CFF</color>
+    <color name="accent_off">#6B6F7A</color>
+</resources>

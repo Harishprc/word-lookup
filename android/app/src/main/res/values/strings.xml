@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Word Lookup</string>
+    <string name="tile_label">Word Lookup</string>
+    <string name="accessibility_service_description">
+        Word Lookup uses this to notice when you select text, so it can show
+        a dictionary card. It only reads the text you select — nothing else
+        on screen is stored or sent anywhere except to the translation API
+        for that selection.
+    </string>
+</resources>

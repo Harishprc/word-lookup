@@ -1,0 +1,37 @@
+#!/bin/sh
+
+#
+# Copyright 2015 the original author or authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+#
+# Standard Gradle wrapper launcher for Unix. Needs
+# gradle/wrapper/gradle-wrapper.jar, which is NOT committed to this repo
+# (binary, can't be authored as text) — open this project in Android
+# Studio once and it will regenerate the jar automatically on first
+# sync, or run `gradle wrapper` with any local Gradle install. See the
+# android/ section of the repo root README.md.
+#
+
+PRG="$0"
+APP_HOME=$(cd "$(dirname "$PRG")" && pwd -P) || exit
+
+DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
+
+if [ -n "$JAVA_HOME" ]; then
+    JAVACMD=$JAVA_HOME/bin/java
+else
+    JAVACMD=java
+fi
+
+if ! command -v "$JAVACMD" >/dev/null 2>&1; then
+    echo "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH." >&2
+    exit 1
+fi
+
+CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+
+exec "$JAVACMD" $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS \
+    "-Dorg.gradle.appname=$(basename "$0")" \
+    -classpath "$CLASSPATH" \
+    org.gradle.wrapper.GradleWrapperMain "$@"

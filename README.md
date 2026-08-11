@@ -136,12 +136,44 @@ Run with `python -m kannada_lookup` (no `.pyw` outside Windows).
 - **macOS:** grant the terminal/Python **Accessibility** and **Input Monitoring** permissions (System Settings → Privacy & Security), else the hook sees nothing. Copy chord is Cmd+C; Forward click is swallowed via a Quartz event tap. Autostart: wrap the command in a LaunchAgent plist under `~/Library/LaunchAgents/`.
 - **Linux:** install `xclip` (X11) or `wl-clipboard` (Wayland). **Neither the Forward click nor the keyboard shortcut can be swallowed on X11** — the focused app receives them too (pynput limitation, documented in `platforms/linux.py`). Pick a shortcut that does nothing in the apps you read in; the recorder warns you about this on Linux. Autostart: a `.desktop` file in `~/.config/autostart/`.
 
+## Android
+
+A separate native app in [`android/`](android/) — this Python codebase can't run on
+Android, so it's a fresh Kotlin/Compose app that reuses the same Gemini prompt, card
+layout, and cache schema so both apps feel like one product. See
+[`android/README.md`](android/README.md) for the full build/install/permission walkthrough;
+short version below.
+
+**Two ways to trigger a lookup**, since Android has no simple "text selected" callback:
+
+| Path | How | Permissions |
+|---|---|---|
+| **Menu** | Select text → tap "Word Lookup" in the Copy/Share toolbar | None |
+| **Instant** | Select text anywhere → card appears with no tap | Accessibility + "display over other apps" |
+
+Both call the same Gemini prompt and show the same card; Instant is optional polish, Menu
+always works.
+
+**Notification-shade toggle:** once installed, drag the Word Lookup tile into Quick
+Settings (pencil/edit icon in the shade) — tapping it flips the same on/off flag the
+in-app switch does, without opening the app.
+
+**Install:** grab `WordLookup-apk` from the [Android Actions workflow](.github/workflows/android.yml)
+runs (Actions tab → latest green run → Artifacts) and sideload it — Play Store distribution
+isn't viable here since their policy restricts the Accessibility API to accessibility-purpose
+apps. Android 13+ needs one extra step for the Instant path: Settings → Apps → Word Lookup →
+⋮ → **Allow restricted settings**, before the Accessibility toggle will even respond.
+
+**Sync:** phone and desktop caches sync through a private GitHub Gist (your own token, `gist`
+scope only) whenever the phone has a network connection — see `android/README.md` for setup.
+It's optional; both apps work fully offline-cached without it.
+
 ## Roadmap (not built)
 
 - **Dictionary dataset import:** a proper word→definition source (not a PDF thesaurus) for the offline layer.
 - **Paid LLM provider:** Claude/GPT via the same `TranslationProvider` ABC, for when data-privacy (no training on prompts) matters.
 - **Packaging:** single-exe is done (see Releases); a signed installer is not — needs a paid code-signing certificate.
-- **Android:** separate app (this codebase can't run on Android) — floating-bubble lookup via `ACTION_PROCESS_TEXT` + overlay, same Gemini prompt.
+- **Android Play Store release:** currently sideload-only (see above); a store release would need to drop the Accessibility-based Instant path or seek an accessibility-purpose exception.
 
 ## Tests
 

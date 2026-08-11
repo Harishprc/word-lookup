@@ -79,18 +79,12 @@ def save_api_key(key: str) -> None:
     lines = []
     if ENV_PATH.exists():
         lines = ENV_PATH.read_text(encoding="utf-8").splitlines()
-        lines = [l for l in lines if not l.startswith("GEMINI_API_KEY=")]
+        lines = [
+            l for l in lines
+            if not l.startswith("GEMINI_API_KEY=") and not l.startswith("PROVIDER=")
+        ]
     lines += [f"GEMINI_API_KEY={key.strip()}", "PROVIDER=gemini"]
-    # De-dup PROVIDER lines while preserving everything else.
-    seen_provider = False
-    out = []
-    for l in lines:
-        if l.startswith("PROVIDER="):
-            if seen_provider:
-                continue
-            seen_provider = True
-        out.append(l)
-    ENV_PATH.write_text("\n".join(out) + "\n", encoding="utf-8")
+    ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
     os.environ["GEMINI_API_KEY"] = key.strip()
     global GEMINI_API_KEY
     GEMINI_API_KEY = key.strip()
@@ -103,7 +97,13 @@ def refresh_language() -> None:
     settings = load_settings() or {}
     TARGET_LANGUAGE = settings.get("target_language", "Kannada")
     entry = languages.get(TARGET_LANGUAGE)
-    TARGET_LANG = entry["code"] or "kn"   # legacy Google-provider ISO code
+    # Legacy Google-provider ISO code. No fallback to "kn": GeminiProvider
+    # reads TARGET_LANGUAGE (the free-text name) instead of this, so
+    # defaulting an unrecognized name here would silently translate into
+    # Kannada under PROVIDER=google while Gemini honors the real name.
+    # Left blank, GoogleTranslateProvider fails loudly with an API error
+    # instead of translating into the wrong language.
+    TARGET_LANG = entry["code"]
     LANGUAGE_GLYPH = entry["glyph"]
 
 # --- Provider -----------------------------------------------------------
@@ -124,6 +124,12 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest").strip()
 
 # Legacy: Google Cloud Translation API key (GCP console, billing required).
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "").strip()
+
+# --- Sync (optional) ------------------------------------------------------
+# GitHub personal access token, "gist" scope only — shares the lookup
+# cache with the Android app via one private Gist. See sync.py. Unset =
+# sync simply never runs; nothing else about the app changes.
+GITHUB_PAT = os.getenv("GITHUB_PAT", "").strip()
 
 # --- Behaviour ----------------------------------------------------------
 SOURCE_LANG = "en"

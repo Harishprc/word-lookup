@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Instant-trigger path (Phase 3). Only listens for text-selection changes —
+no window-content snooping beyond reading the selected node's text, no
+key logging, no screenshotting. canRetrieveWindowContent is required to
+read the selected text/bounds of the node that fired the event.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeViewTextSelectionChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRetrieveInteractiveWindows"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/accessibility_service_description"
+    android:notificationTimeout="200"
+    android:settingsActivity="com.harish.wordlookup.ui.MainActivity" />

@@ -89,7 +89,7 @@ class GeminiProvider(TranslationProvider):
         try:
             resp = requests.post(
                 self.ENDPOINT.format(model=self._model),
-                params={"key": self._key},
+                headers={"x-goog-api-key": self._key},
                 json={
                     "contents": [
                         {
@@ -184,7 +184,7 @@ class GoogleTranslateProvider(TranslationProvider):
         try:
             resp = requests.post(
                 self.ENDPOINT,
-                params={"key": self._key},
+                headers={"x-goog-api-key": self._key},
                 data={
                     "q": text,
                     "source": config.SOURCE_LANG,

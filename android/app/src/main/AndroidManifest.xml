@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Instant-trigger path (Phase 3): draw the card over other apps. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Android 13+ requires runtime consent to post the "service running"
+         foreground-style notification the accessibility service shows. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <application
+        android:name=".WordLookupApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.WordLookup">
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.WordLookup">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Path B: appears as "Word Lookup" in the text-selection toolbar
+             (Copy / Share / …) of any app, no special permission needed. -->
+        <activity
+            android:name=".service.ProcessTextActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.WordLookup.Transparent">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <!-- Path A: instant card on text selection anywhere. Must be
+             enabled by hand in Settings > Accessibility (see MainActivity's
+             permission checklist) — Android does not allow enabling this
+             from inside the app itself. -->
+        <service
+            android:name=".service.SelectionAccessibilityService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- Quick Settings tile: on/off from the notification shade. -->
+        <service
+            android:name=".service.LookupTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- SyncWorker is deliberately NOT declared here: it's a
+             CoroutineWorker, not an android.app.Service. WorkManager
+             instantiates it via its own WorkerFactory/reflection, and its
+             own manifest-merged <provider> (from the androidx.work
+             library) handles registration — declaring it as a <service>
+             would be both wrong (CoroutineWorker isn't a Service subclass)
+             and redundant. -->
+
+    </application>
+</manifest>

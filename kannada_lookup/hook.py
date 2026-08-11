@@ -66,21 +66,44 @@ class XButtonHook(_DebouncedHook):
         self._listener = backend.make_listener(self._debounced, enabled)
 
 
-class KeyComboHook(_DebouncedHook):
-    """Same contract for a keyboard shortcut — the laptop alternative to
-    the Forward button, and also how the ON/OFF toggle is bound.
+class KeyComboHook:
+    """One shared OS-level keyboard hook serving every bound shortcut —
+    the lookup shortcut (laptop alternative to the Forward button) and the
+    ON/OFF toggle both go through this, instead of one hook installation
+    each. Every keystroke on the system only has to pass through a single
+    filter no matter how many shortcuts are configured.
 
     On Windows and macOS the backend swallows the chord so the focused app
     never sees it; on X11 it cannot (backend.SUPPRESSES_HOTKEY says which).
 
-    `always_on` is for the toggle: the toggle shortcut has to keep working
-    while the tool is OFF, otherwise there would be no way to switch it
-    back on from the keyboard.
+    `bindings` is a list of (combo, on_trigger, enabled, always_on)
+    tuples. `always_on` is for the toggle: the toggle shortcut has to keep
+    working while the tool is OFF, otherwise there would be no way to
+    switch it back on from the keyboard. Each binding gets its own
+    debounce timer so one shortcut firing rapidly can't suppress another.
     """
 
-    def __init__(self, combo, on_trigger, enabled: threading.Event,
-                 always_on: bool = False):
-        super().__init__(on_trigger)
-        self.combo = combo
-        gate = _ALWAYS_SET if always_on else enabled
-        self._listener = backend.make_key_listener(combo, self._debounced, gate)
+    def __init__(self, bindings):
+        self._listener = backend.make_key_listener([
+            (combo, self._debounced(on_trigger),
+             _ALWAYS_SET if always_on else enabled)
+            for combo, on_trigger, enabled, always_on in bindings
+        ])
+
+    @staticmethod
+    def _debounced(on_trigger):
+        last_fire = [0.0]
+
+        def _fire():
+            now = time.monotonic()
+            if now - last_fire[0] >= config.DEBOUNCE_S:
+                last_fire[0] = now
+                on_trigger()  # must be non-blocking (emits a Qt signal)
+
+        return _fire
+
+    def start(self):
+        self._listener.start()
+
+    def stop(self):
+        self._listener.stop()
