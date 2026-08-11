@@ -46,8 +46,17 @@ class GeminiProvider(
 
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
-        // Verbatim from translator.py:62-76 — do not reword independently
-        // of the desktop prompt, the two should stay in lockstep.
+        // Verbatim from translator.py's _PROMPT — do not reword
+        // independently of the desktop prompt, the two must stay in
+        // lockstep (identical cards for the same word, one shared cache).
+        //
+        // The translation rules exist because weaker models invent
+        // plausible-looking words in low-resource scripts: asking for
+        // "restricted" in Kannada produced "ಮಿಚ್ಛಿತ / ನಿಯನ್ಶ್ರಿತ" — neither is
+        // a real word, and the second is a malformed consonant cluster
+        // that renders with a dotted circle (the Unicode
+        // orphaned-combining-mark marker). Naming the failure modes
+        // explicitly is what suppresses them.
         private fun prompt(language: String, text: String): String =
             "You are an English-$language dictionary. For the English word or " +
                 "phrase below, reply with ONLY this JSON:\n" +
@@ -61,6 +70,17 @@ class GeminiProvider(
                 "\"example_native\": \"<one short, simple example sentence written in " +
                 "$language that uses that word>\"}\n" +
                 "For multi-word phrases, synonyms may be an empty list.\n\n" +
+                "Rules for the $language text:\n" +
+                "- Give exactly ONE translation: the single most commonly used " +
+                "word. Never offer alternatives, and never use a slash.\n" +
+                "- It must be a real, standard $language word that a native " +
+                "speaker would recognise and a dictionary would list. If no true " +
+                "equivalent exists, use the ordinary $language phrase for the " +
+                "idea rather than inventing a word.\n" +
+                "- Write it in correct, well-formed $language script. Never " +
+                "spell the English word out phonetically in that script.\n" +
+                "- Use only valid letter combinations for $language. Do not " +
+                "produce malformed clusters.\n\n" +
                 "English: $text"
     }
 

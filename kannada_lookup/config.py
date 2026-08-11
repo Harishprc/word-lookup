@@ -117,10 +117,15 @@ PROVIDER = os.getenv("PROVIDER", "gemini").strip().lower()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
 # Model behind the lookup. "-latest" alias auto-tracks Google's current
-# flash-lite model, so it won't go stale the way a pinned version number
-# eventually does (confirmed live against the API — see conversation).
-# Override in .env if Google ever retires this alias too.
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest").strip()
+# model, so it won't go stale the way a pinned version number eventually
+# does. Override in .env if Google ever retires this alias too.
+#
+# flash, not flash-lite: flash-lite is cheaper and has a higher daily
+# quota, but it invents plausible-looking words in low-resource scripts —
+# "restricted" came back as "ಮಿಚ್ಛಿತ / ನಿಯನ್ಶ್ರಿತ" in Kannada, neither a real
+# word. Set GEMINI_MODEL=gemini-flash-lite-latest to trade that accuracy
+# back for quota if you look up hundreds of words a day.
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest").strip()
 
 # Legacy: Google Cloud Translation API key (GCP console, billing required).
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "").strip()

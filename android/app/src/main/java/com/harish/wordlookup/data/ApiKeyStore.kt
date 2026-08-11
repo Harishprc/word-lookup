@@ -51,9 +51,14 @@ class ApiKeyStore(context: Context) {
         private const val KEY_GH_PAT = "github_pat"
         private const val KEY_GIST_ID = "gist_id"
 
-        // Same alias-tracking model as config.py's GEMINI_MODEL default —
-        // auto-follows Google's current flash-lite model instead of a
-        // version pin that eventually goes stale.
-        const val DEFAULT_MODEL = "gemini-flash-lite-latest"
+        // Same alias-tracking default as config.py's GEMINI_MODEL —
+        // auto-follows Google's current model instead of a version pin
+        // that eventually goes stale.
+        //
+        // flash, not flash-lite: flash-lite has a higher free daily quota
+        // but invents plausible-looking words in low-resource scripts
+        // ("restricted" came back as "ಮಿಚ್ಛಿತ / ನಿಯನ್ಶ್ರಿತ" in Kannada, neither
+        // a real word). Editable in Settings to trade back if needed.
+        const val DEFAULT_MODEL = "gemini-flash-latest"
     }
 }

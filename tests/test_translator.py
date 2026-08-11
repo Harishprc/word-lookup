@@ -114,6 +114,25 @@ def test_gemini_prompt_uses_configured_language():
     assert "Kannada" not in prompt
 
 
+def test_gemini_prompt_forbids_the_known_bad_output_shapes():
+    """Weak models invent words in low-resource scripts (Kannada
+    "restricted" once returned "ಮಿಚ್ಛಿತ / ನಿಯನ್ಶ್ರಿತ" — two non-words, the
+    second a malformed cluster). These constraints are what suppress that,
+    so they must not be dropped; the Android copy in GeminiProvider.kt
+    carries the same lines verbatim."""
+    with patch(
+        "kannada_lookup.translator.requests.post",
+        return_value=_response(200, _gemini_payload(_FULL_JSON)),
+    ) as post:
+        GeminiProvider("k", "m", "Kannada").lookup("restricted")
+    prompt = post.call_args.kwargs["json"]["contents"][0]["parts"][0]["text"]
+    assert "exactly ONE translation" in prompt
+    assert "never use a slash" in prompt
+    assert "real, standard Kannada word" in prompt
+    assert "phonetically" in prompt
+    assert "malformed clusters" in prompt
+
+
 def test_gemini_strips_markdown_fences():
     raw = '```json\n{"translation": "ಪುಸ್ತಕ", "example_native": "ಇದು ನನ್ನ ಪುಸ್ತಕ."}\n```'
     with patch(
