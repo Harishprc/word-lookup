@@ -9,18 +9,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SmallTopAppBar
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,14 +55,15 @@ fun RegisterScreen(
 
     Scaffold(
         topBar = {
-            SmallTopAppBar(
+            // TopAppBar, not SmallTopAppBar: the latter was deprecated in
+            // Material3 1.2 and removed in 1.3 (which the 2024.09 BOM pulls).
+            TopAppBar(
                 title = { Text("Word register (${entries.size})") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.smallTopAppBarColors(),
             )
         },
     ) { padding ->
@@ -85,7 +85,7 @@ fun RegisterScreen(
             LazyColumn {
                 items(filtered, key = { it.language + it.result.original }) { entry ->
                     RegisterRow(entry, onDelete)
-                    Divider()
+                    HorizontalDivider()
                 }
             }
         }

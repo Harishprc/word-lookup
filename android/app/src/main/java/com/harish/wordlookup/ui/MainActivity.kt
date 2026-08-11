@@ -17,7 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -188,7 +188,7 @@ private fun HomeScreen(
                 actionLabel = if (overlayGranted) "Granted" else "Open Settings",
             ) { context.startActivity(Permissions.overlayIntent(context)) }
 
-            Divider()
+            HorizontalDivider()
 
             PermissionRow(
                 label = "Accessibility service",

@@ -78,11 +78,40 @@ jobs:
           echo "$WORDLOOKUP_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
           echo "WORDLOOKUP_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
 
+      # Output is tee'd so the failure step below can turn compiler/test
+      # errors into GitHub annotations. Raw job logs need admin rights to
+      # download, but annotations are readable from the public API — so
+      # this is what makes a red build diagnosable without pasting logs
+      # around. pipefail keeps gradle's exit code through the pipe.
       - name: Run unit tests
-        run: gradle :app:test --no-daemon
+        run: |
+          set -o pipefail
+          gradle :app:test --no-daemon 2>&1 | tee "$RUNNER_TEMP/gradle-test.log"
 
       - name: Build APK
-        run: gradle :app:assembleRelease --no-daemon
+        run: |
+          set -o pipefail
+          gradle :app:assembleRelease --no-daemon 2>&1 | tee "$RUNNER_TEMP/gradle-build.log"
+
+      - name: Surface Gradle errors as annotations
+        if: failure()
+        run: |
+          for f in "$RUNNER_TEMP"/gradle-*.log; do
+            [ -f "$f" ] || continue
+            grep -E '^e: |^w: .*error|error:|FAILURE:|Caused by:|FAILED|Unresolved reference|Compilation error' "$f" \
+              | head -40 \
+              | while IFS= read -r line; do echo "::error::${line}"; done
+          done
+
+      # Test reports explain a red :app:test far better than the console
+      # tail; kept for the cases where the annotation grep isn't enough.
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: android/app/build/reports/
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@v4
         with:
