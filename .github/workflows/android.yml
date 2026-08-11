@@ -38,6 +38,18 @@ jobs:
       run:
         working-directory: android
 
+    # Secrets are hoisted to job-level env because the `secrets` context is
+    # NOT available in a step-level `if:` — GitHub rejects the entire
+    # workflow file with "Unrecognized named-value: 'secrets'", which
+    # surfaces as a run that fails with zero jobs and no checks on the PR.
+    # The `env` context IS allowed there, so the optional-signing steps
+    # below branch on these instead.
+    env:
+      WORDLOOKUP_KEYSTORE_B64: ${{ secrets.WORDLOOKUP_KEYSTORE_B64 }}
+      WORDLOOKUP_KEYSTORE_PASSWORD: ${{ secrets.WORDLOOKUP_KEYSTORE_PASSWORD }}
+      WORDLOOKUP_KEY_ALIAS: ${{ secrets.WORDLOOKUP_KEY_ALIAS }}
+      WORDLOOKUP_KEY_PASSWORD: ${{ secrets.WORDLOOKUP_KEY_PASSWORD }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -57,21 +69,19 @@ jobs:
       # release build type falls back to debug signing when unset. Set
       # WORDLOOKUP_KEYSTORE_B64 (base64 of the .jks), WORDLOOKUP_KEYSTORE_PASSWORD,
       # WORDLOOKUP_KEY_ALIAS, WORDLOOKUP_KEY_PASSWORD in repo Settings > Secrets.
+      # Exports WORDLOOKUP_KEYSTORE_PATH for the build step below; when no
+      # keystore secret is configured the variable stays unset and
+      # app/build.gradle.kts falls back to debug signing.
       - name: Decode release keystore
-        if: ${{ secrets.WORDLOOKUP_KEYSTORE_B64 != '' }}
-        env:
-          WORDLOOKUP_KEYSTORE_B64: ${{ secrets.WORDLOOKUP_KEYSTORE_B64 }}
-        run: echo "$WORDLOOKUP_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+        if: env.WORDLOOKUP_KEYSTORE_B64 != ''
+        run: |
+          echo "$WORDLOOKUP_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "WORDLOOKUP_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
 
       - name: Run unit tests
         run: gradle :app:test --no-daemon
 
       - name: Build APK
-        env:
-          WORDLOOKUP_KEYSTORE_PATH: ${{ secrets.WORDLOOKUP_KEYSTORE_B64 != '' && format('{0}/release.jks', runner.temp) || '' }}
-          WORDLOOKUP_KEYSTORE_PASSWORD: ${{ secrets.WORDLOOKUP_KEYSTORE_PASSWORD }}
-          WORDLOOKUP_KEY_ALIAS: ${{ secrets.WORDLOOKUP_KEY_ALIAS }}
-          WORDLOOKUP_KEY_PASSWORD: ${{ secrets.WORDLOOKUP_KEY_PASSWORD }}
         run: gradle :app:assembleRelease --no-daemon
 
       - uses: actions/upload-artifact@v4
