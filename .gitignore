@@ -1,6 +1,12 @@
 # Secrets and personal data — never commit these.
 .env
-data/
+# Leading slash anchors this to the repo root: the desktop app's runtime
+# data/ (lookups.db, settings.json, register.html). WITHOUT the slash git
+# matches a directory named "data" at ANY depth, which silently swallowed
+# the Android app's whole com.harish.wordlookup.data source package —
+# fourteen Kotlin files that were never committed and failed CI with
+# "Unresolved reference 'data'".
+/data/
 *.pdf
 *.db
 
