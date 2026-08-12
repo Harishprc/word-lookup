@@ -7,8 +7,12 @@ zero code changes at call sites (GoogleTranslateProvider kept as fallback;
 a paid Claude/GPT provider can slot in later the same way).
 
 COST NOTE (Gemini via AI Studio key):
-  - Free tier, permanent, no credit card: roughly 1,500 requests/day on
-    flash-lite class models (10-30 req/min). Ample for personal lookups.
+  - Free tier, permanent, no credit card. The allowance depends on the
+    model: flash-lite class is the most generous (~1,500/day), the default
+    flash class markedly less, in both requests/day and requests/minute.
+    Either is ample for reading, since repeats are served from cache; a
+    bulk pass over the whole cache is what actually trips the per-minute
+    limit (see scripts/backfill_native_synonyms.py).
   - Caveat: Google may use free-tier prompts to improve its models —
     fine for single-word lookups, don't send anything sensitive.
 
@@ -40,6 +44,10 @@ class LookupResult:
     synonyms: str = ""        # 2-3 conversational-English synonyms, joined
     example_en: str = ""      # one short example sentence in English
     example_native: str = ""  # one short example sentence in the target language
+    # 2-3 synonyms of the *translation*, in the target language. Empty on
+    # rows cached before this field existed (they are served from cache and
+    # never refetched) and on plain-translation providers.
+    synonyms_native: str = ""
 
 
 class LookupFailed(Exception):
@@ -75,10 +83,16 @@ class GeminiProvider(TranslationProvider):
         '"example_en": "<one short, simple example sentence in English '
         'that uses the word>", '
         '"translation": "<the {language} translation>", '
+        '"synonyms_native": ["<2-3 {language} synonyms of that '
+        'translation, written in {language} script>"], '
         '"example_native": "<one short, simple example sentence written in '
         "{language} that uses that word>\"}}\n"
         "For multi-word phrases, synonyms may be an empty list.\n\n"
         "Rules for the {language} text:\n"
+        "- synonyms_native must be synonyms of the {language} translation, "
+        "not translations of the English synonyms, and must not repeat the "
+        "translation itself. Use an empty list if there is no natural "
+        "{language} synonym rather than padding it with loose matches.\n"
         "- Give exactly ONE translation: the single most commonly used "
         "word. Never offer alternatives, and never use a slash.\n"
         "- It must be a real, standard {language} word that a native "
@@ -163,8 +177,12 @@ class GeminiProvider(TranslationProvider):
                 f"API key rejected ({resp.status_code}). Check GEMINI_API_KEY in .env."
             )
         if resp.status_code == 429:
+            # Deliberately vague on numbers: the limit depends on the model
+            # (flash-lite allows far more per day than flash) and Google
+            # changes them, so quoting a figure here goes stale and misleads.
+            # 429 is also per-minute as often as per-day, hence "a minute".
             raise LookupFailed(
-                "Free-tier quota hit (~1,500/day). Wait a minute or try tomorrow."
+                "Rate limit or daily quota hit. Wait a minute and try again."
             )
         if resp.status_code == 404:
             raise LookupFailed(
@@ -184,19 +202,37 @@ class GeminiProvider(TranslationProvider):
         if not translation:
             raise LookupFailed("No translation returned — try again.")
 
-        synonyms = data.get("synonyms", "")
-        if isinstance(synonyms, list):  # model may return list or string
-            synonyms = ", ".join(str(s).strip() for s in synonyms if str(s).strip())
+        synonyms = self._join_synonyms(data.get("synonyms", ""))
+        synonyms_native = self._join_synonyms(data.get("synonyms_native", ""))
+
+        # Models sometimes answer the synonym field with the translation
+        # itself, which reads as a duplicate on the card. Dropping it here
+        # is cheaper than another round trip and can only ever remove a
+        # word the user is already looking at.
+        if synonyms_native:
+            kept = [
+                s for s in synonyms_native.split(", ") if s.strip() != translation
+            ]
+            synonyms_native = ", ".join(kept)
 
         return LookupResult(
             original=text,
             translation=translation,
             part_of_speech=str(data.get("part_of_speech", "")).strip().lower(),
             meaning=str(data.get("meaning", "")).strip(),
-            synonyms=str(synonyms).strip(),
+            synonyms=synonyms,
             example_en=str(data.get("example_en", "")).strip(),
             example_native=str(data.get("example_native", "")).strip(),
+            synonyms_native=synonyms_native,
         )
+
+    @staticmethod
+    def _join_synonyms(value) -> str:
+        """Models return this field as either a JSON list or an
+        already-joined string, depending on the model and the day."""
+        if isinstance(value, list):
+            return ", ".join(str(s).strip() for s in value if str(s).strip())
+        return str(value).strip()
 
     @staticmethod
     def _parse_json(raw: str) -> dict:

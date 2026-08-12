@@ -251,3 +251,53 @@ def test_sync_now_pushes_local_words_on_first_sync(monkeypatch, tmp_path):
     fake_client.push.assert_called_once()
     pushed_entries = fake_client.push.call_args.args[1]["entries"]
     assert any(e["original"] == "Strength" for e in pushed_entries)
+
+
+# --- native synonyms across the wire (v4 field) ------------------------------
+
+
+def test_native_synonyms_survive_a_wire_round_trip():
+    store_row = {
+        "language": "Kannada",
+        "key": "strength",
+        "original": "Strength",
+        "translation": "ಶಕ್ತಿ",
+        "part_of_speech": "noun",
+        "meaning": "physical power",
+        "synonyms": "power, might",
+        "example_en": "She has great strength.",
+        "example_native": "ಅವನಿಗೆ ಶಕ್ತಿ ಇದೆ.",
+        "synonyms_native": "ಬಲ, ಸಾಮರ್ಥ್ಯ",
+        "provider": "test",
+        "created_at": 1.0,
+        "updated_at": 2.0,
+        "deleted": 0,
+    }
+    back = sync._from_wire(sync._to_wire(store_row))
+    assert back["synonyms_native"] == "ಬಲ, ಸಾಮರ್ಥ್ಯ"
+
+
+def test_payload_from_a_pre_v4_device_still_merges():
+    """A machine on the older schema sends no synonymsNative key at all.
+    That must degrade to an empty string, not abort the whole sync."""
+    legacy = _entry(key="sky")
+    assert "synonymsNative" not in legacy
+    row = sync._from_wire(legacy)
+    assert row["synonyms_native"] == ""
+
+
+def test_pre_v4_payload_can_be_written_to_the_store(tmp_path):
+    store = LookupStore(tmp_path / "t.db")
+    store.upsert_raw(sync._from_wire(_entry(key="sky", translation="ಆಕಾಶ")))
+    assert store.get("sky", "Kannada").synonyms_native == ""
+
+
+def test_native_synonyms_participate_in_the_tiebreak():
+    """Two rows identical but for their native synonyms must not be
+    treated as the same row by the equal-timestamp tiebreak, or one
+    device's synonyms would silently win at random."""
+    a = _entry(updated_at=1000)
+    b = _entry(updated_at=1000)
+    a["synonymsNative"] = "ಬಲ"
+    b["synonymsNative"] = "ಸಾಮರ್ಥ್ಯ"
+    assert sync._tiebreak_key(a) != sync._tiebreak_key(b)

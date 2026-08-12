@@ -10,6 +10,7 @@ Card layout (rows collapse when their field is empty):
     synonyms                — 2-3 conversational synonyms, italic
     ── divider ──
     translation             — target-language translation
+    synonyms (native)       — 2-3 synonyms of the translation, italic
     example                 — one native example sentence, italic
 
 WA_ShowWithoutActivating + Tool window flags mean the popup NEVER steals
@@ -73,6 +74,15 @@ QLabel#translation {{
     font-family: {_NATIVE_FONTS};
     font-size: 16pt;
 }}
+/* Synonyms of the translation. Same muted italic treatment as the English
+   synonyms row so the two halves of the card read symmetrically, but in
+   the native font — Segoe UI has no Indic glyphs. */
+QLabel#synonymsNative {{
+    color: #6a6a6a;
+    font-family: {_NATIVE_FONTS};
+    font-size: 11pt;
+    font-style: italic;
+}}
 QLabel#example {{
     color: #555555;
     font-family: {_NATIVE_FONTS};
@@ -110,6 +120,7 @@ class LookupPopup(QWidget):
         self._meaning = QLabel(objectName="meaning")
         self._synonyms = QLabel(objectName="synonyms")
         self._translation = QLabel(objectName="translation")
+        self._synonyms_native = QLabel(objectName="synonymsNative")
         self._example = QLabel(objectName="example")
         self._labels = (
             self._word,
@@ -117,6 +128,7 @@ class LookupPopup(QWidget):
             self._meaning,
             self._synonyms,
             self._translation,
+            self._synonyms_native,
             self._example,
         )
         for lbl in self._labels:
@@ -142,6 +154,7 @@ class LookupPopup(QWidget):
         card_layout.addWidget(self._synonyms)
         card_layout.addWidget(self._divider)
         card_layout.addWidget(self._translation)
+        card_layout.addWidget(self._synonyms_native)
         card_layout.addWidget(self._example)
 
         outer = QVBoxLayout(self)
@@ -169,6 +182,7 @@ class LookupPopup(QWidget):
             meaning=result.meaning,
             synonyms=result.synonyms,
             translation=result.translation,
+            synonyms_native=result.synonyms_native,
             example=result.example_native,
         )
         self._present(timeout_ms=config.POPUP_TIMEOUT_MS)
@@ -182,7 +196,7 @@ class LookupPopup(QWidget):
     # --- internals ------------------------------------------------------
 
     def _set_texts(self, word="", pos="", meaning="", synonyms="",
-                   translation="", example=""):
+                   translation="", example="", synonyms_native=""):
         """Fill rows; empty ones collapse. Divider only separates the two
         halves — hidden when the English half has nothing to separate."""
         self._word.setText(word)
@@ -190,6 +204,7 @@ class LookupPopup(QWidget):
         self._meaning.setText(meaning)
         self._synonyms.setText(synonyms)
         self._translation.setText(translation)
+        self._synonyms_native.setText(synonyms_native)
         self._example.setText(example)
         for lbl in self._labels:
             lbl.setVisible(bool(lbl.text()))

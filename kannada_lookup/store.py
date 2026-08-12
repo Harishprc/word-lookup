@@ -50,21 +50,26 @@ CREATE TABLE IF NOT EXISTS lookups_v2 (
     created_at      REAL NOT NULL,
     updated_at      REAL NOT NULL DEFAULT 0,   -- v3: sync merge key
     deleted         INTEGER NOT NULL DEFAULT 0, -- v3: tombstone for sync
+    synonyms_native TEXT NOT NULL DEFAULT '',  -- v4: synonyms of the translation
     PRIMARY KEY (language, key)
 )
 """
 
+# Order must match LookupResult's field order — rows are splatted straight
+# into it positionally.
 _RESULT_COLS = (
     "original, translation, part_of_speech, meaning, synonyms, "
-    "example_en, example_native"
+    "example_en, example_native, synonyms_native"
 )
 
 # Full row shape the sync layer needs (register/get only need _RESULT_COLS).
 _SYNC_COLS = (
     "language, key, original, translation, part_of_speech, meaning, "
     "synonyms, example_en, example_native, provider, created_at, "
-    "updated_at, deleted"
+    "updated_at, deleted, synonyms_native"
 )
+
+_SYNC_COL_NAMES = [c.strip() for c in _SYNC_COLS.split(",")]
 
 
 def _normalize(text: str) -> str:
@@ -79,6 +84,7 @@ class LookupStore:
             con.execute(_SCHEMA)
             self._migrate_v1(con)
             self._migrate_v2_add_sync_columns(con)
+            self._migrate_v3_add_native_synonyms(con)
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self._path)
@@ -125,6 +131,22 @@ class LookupStore:
             "WHERE updated_at = 0 AND created_at != 0"
         )
 
+    @staticmethod
+    def _migrate_v3_add_native_synonyms(con: sqlite3.Connection) -> None:
+        """Idempotent ALTER adding synonyms_native (v4).
+
+        Deliberately no backfill: the value can only come from the API, and
+        rows cached before this column existed are served from cache and
+        never refetched, so they simply keep an empty value. The popup and
+        register both hide empty rows, so an old entry renders exactly as
+        it did before rather than showing a blank labelled field."""
+        columns = {row[1] for row in con.execute("PRAGMA table_info(lookups_v2)")}
+        if "synonyms_native" not in columns:
+            con.execute(
+                "ALTER TABLE lookups_v2 "
+                "ADD COLUMN synonyms_native TEXT NOT NULL DEFAULT ''"
+            )
+
     def get(self, text: str, language: str) -> LookupResult | None:
         """A soft-deleted (tombstoned) entry is never served from cache, so
         a word deleted on one device gets a fresh lookup rather than
@@ -147,8 +169,8 @@ class LookupStore:
                 "INSERT OR REPLACE INTO lookups_v2 "
                 "(language, key, original, translation, part_of_speech, "
                 " meaning, synonyms, example_en, example_native, provider, "
-                " created_at, updated_at, deleted) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+                " created_at, updated_at, deleted, synonyms_native) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)",
                 (
                     language,
                     _normalize(result.original),
@@ -162,6 +184,7 @@ class LookupStore:
                     provider,
                     now,
                     now,
+                    result.synonyms_native,
                 ),
             )
 
@@ -182,15 +205,22 @@ class LookupStore:
         with self._connect() as con:
             rows = con.execute(
                 f"SELECT {_RESULT_COLS}, language, created_at "
-                "FROM lookups_v2 WHERE deleted = 0 ORDER BY created_at DESC"
+                # rowid breaks the tie: time.time() on Windows can return
+                # the same value for two calls ~15ms apart, so two quick
+                # lookups share a created_at and ordering by it alone is
+                # arbitrary — the newer word could render below the older
+                # one. rowid rises with insertion, so it means "written
+                # later" exactly when the timestamps cannot say.
+                "FROM lookups_v2 WHERE deleted = 0 "
+                "ORDER BY created_at DESC, rowid DESC"
             ).fetchall()
         entries = []
         for row in rows:
             entries.append(
                 {
-                    "result": LookupResult(*row[:7]),
-                    "language": row[7],
-                    "created_at": row[8],
+                    "result": LookupResult(*row[:8]),
+                    "language": row[8],
+                    "created_at": row[9],
                 }
             )
         return entries
@@ -202,8 +232,7 @@ class LookupStore:
             rows = con.execute(
                 f"SELECT {_SYNC_COLS} FROM lookups_v2"
             ).fetchall()
-        cols = [c.strip() for c in _SYNC_COLS.split(",")]
-        return [dict(zip(cols, row)) for row in rows]
+        return [dict(zip(_SYNC_COL_NAMES, row)) for row in rows]
 
     def upsert_raw(self, row: dict) -> None:
         """Writes a full row (as produced by `all_including_deleted` /
@@ -211,10 +240,14 @@ class LookupStore:
         created_at/updated_at, since the caller (sync.py) already decided
         those via the merge, and re-stamping "now" here would defeat the
         whole point of last-write-wins."""
+        # Placeholders are counted from _SYNC_COLS rather than written out:
+        # a hand-typed list silently goes out of step the next time a
+        # column is added, which is exactly how the v4 column broke this.
+        placeholders = ", ".join("?" * len(_SYNC_COL_NAMES))
         with self._connect() as con:
             con.execute(
                 "INSERT OR REPLACE INTO lookups_v2 "
-                f"({_SYNC_COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                f"({_SYNC_COLS}) VALUES ({placeholders})",
                 (
                     row["language"],
                     row["key"],
@@ -229,5 +262,9 @@ class LookupStore:
                     row["created_at"],
                     row["updated_at"],
                     1 if row["deleted"] else 0,
+                    # .get: a payload synced from a device still on the
+                    # pre-v4 schema has no such key, and a missing native
+                    # synonym must not abort the whole merge.
+                    row.get("synonyms_native", ""),
                 ),
             )

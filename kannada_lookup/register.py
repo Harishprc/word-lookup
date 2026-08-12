@@ -7,6 +7,7 @@ English example, synonyms, translation, native example.
 """
 
 import html
+import itertools
 import time
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from .store import DB_PATH, LookupStore
 
 OUT_DIR = DB_PATH.parent
 _STEM = "register"
+_counter = itertools.count()
 
 _PAGE = """<!DOCTYPE html>
 <html lang="en">
@@ -60,6 +62,7 @@ _PAGE = """<!DOCTYPE html>
     font-family: "Noto Sans Kannada", "Nirmala UI", "Segoe UI", sans-serif;
   }}
   .translation {{ font-size: 12.5pt; }}
+  .synnative {{ color: #6a6a6a; font-style: italic; font-size: 10.5pt; }}
   .exnative {{ color: #555; font-style: italic; font-size: 10.5pt; }}
   .lang, .date {{ color: #8a8f9c; font-size: 9pt; white-space: nowrap; }}
 </style>
@@ -97,6 +100,7 @@ _ROW = """    <tr>
       <td class="exen">{example_en}</td>
       <td class="syn">{synonyms}</td>
       <td class="native"><div class="translation">{translation}</div>
+          <div class="synnative">{synonyms_native}</div>
           <div class="exnative">{example_native}</div></td>
       <td class="lang">{language}</td>
       <td class="date">{date}</td>
@@ -122,11 +126,7 @@ def generate(store: LookupStore | None = None, out_path: Path | None = None) -> 
     """
     store = store or LookupStore()
     if out_path is None:
-        # Milliseconds, not whole seconds: two generate() calls inside the
-        # same wall-clock second (a script, or a very fast double-click)
-        # would otherwise collide on the same filename and silently
-        # reintroduce the exact bug this scheme exists to fix.
-        out_path = OUT_DIR / f"{_STEM}-{int(time.time() * 1000)}.html"
+        out_path = _unique_path()
     rows = []
     entries = store.all_entries()
     for entry in entries:
@@ -145,6 +145,7 @@ def generate(store: LookupStore | None = None, out_path: Path | None = None) -> 
                 example_en=e(r.example_en),
                 synonyms=e(r.synonyms),
                 translation=e(r.translation),
+                synonyms_native=e(r.synonyms_native),
                 example_native=e(r.example_native),
                 language=e(entry["language"]),
                 date=time.strftime("%d %b %Y", time.localtime(entry["created_at"])),
@@ -163,6 +164,22 @@ def generate(store: LookupStore | None = None, out_path: Path | None = None) -> 
     return out_path
 
 
+def _unique_path() -> Path:
+    """A filename never used before in this process.
+
+    Two generate() calls can land in the same millisecond, so a bare
+    timestamp is not enough. Checking `exists()` instead is worse than it
+    looks: _clean_stale deletes the previous file, so a name from an
+    earlier click is "free" again and could be handed out a second time —
+    and the browser may still hold *that* name in its cache, which is the
+    whole failure being designed out.
+
+    The monotonic counter never yields the same name twice for the life of
+    the process, which is exactly the window a browser's cache spans here.
+    """
+    return OUT_DIR / f"{_STEM}-{int(time.time() * 1000)}-{next(_counter)}.html"
+
+
 def _clean_stale(current: Path) -> None:
     """Remove earlier register-*.html files, keeping only the one just
     written. Best-effort: a locked file (still open in a browser tab from
@@ -175,3 +192,28 @@ def _clean_stale(current: Path) -> None:
                 old.unlink()
             except OSError:
                 pass
+
+
+def generate_and_open(store: LookupStore | None = None) -> Path:
+    """Regenerate the register and open it. This is the whole "Open word
+    register" action; main.py's tray handler is a one-line call to this so
+    the browser-launch behaviour is testable without constructing App
+    (which needs live mouse/keyboard hooks in __init__).
+
+    Opens the raw filesystem path, NEVER a file:// URI
+    (webbrowser.open(str(path)), not a QUrl/pathlib .as_uri()). Reproduced
+    live on a real machine: QDesktopServices.openUrl(QUrl.fromLocalFile(...))
+    returned success but opened nothing, and feeding the IDENTICAL file://
+    string to plain os.startfile() also opened nothing — so this isn't a
+    Qt bug, it's Windows' `file:` URL-protocol resolution being unreliable
+    independent of the `.html` extension association a raw path uses.
+    os.startfile() on the bare path succeeded every time in the same test.
+    webbrowser.open() on Windows calls os.startfile() with whatever string
+    it receives, so passing the raw path here is what avoids the broken
+    codepath — building a URI at any point in this call defeats the fix.
+    """
+    import webbrowser
+
+    path = generate(store)
+    webbrowser.open(str(path))
+    return path

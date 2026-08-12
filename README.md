@@ -4,7 +4,7 @@ Select any English word or phrase in **any** app (PDF reader, Word, Slack, brows
 
 ## Supported languages
 
-26 target languages, picked once on first run and changeable by deleting `data/settings.json`. The tray icon becomes a native glyph of whichever you choose.
+26 target languages, picked on first run and switchable any time from the tray menu → **Translation language**. The tray icon becomes a native glyph of whichever you choose.
 
 **Indian languages** — Kannada (ಕ), Hindi (अ), Tamil (த), Telugu (త), Malayalam (മ), Marathi (म), Bengali (ব), Gujarati (ગ), Punjabi (ਪ), Odia (ଓ), Urdu (ا)
 
@@ -51,7 +51,20 @@ Your key is yours: it is written to a local `.env` that is gitignored and never 
 
 Grab `WordLookup.exe` from the [**Releases**](https://github.com/Harishprc/word-lookup/releases/latest) page and run it. Settings, your API key and the word register are stored in `%LOCALAPPDATA%\WordLookup\`.
 
-> **Expect a SmartScreen warning.** The build is unsigned (code-signing certificates cost money), and it installs a global low-level mouse hook — a combination antivirus heuristics dislike. Click *More info → Run anyway*, or use Option B if you'd rather run code you can read. Every line of the source is in this repo, and the workflow that builds the exe is in [`.github/workflows/release.yml`](.github/workflows/release.yml).
+> **Expect Windows to warn you twice.** The build is unsigned — code-signing certificates cost a few hundred dollars a year — and it installs a global low-level mouse hook, a combination antivirus heuristics dislike. Neither warning means malware was detected; both are *reputation* checks that any new unsigned binary fails until enough people have downloaded it.
+>
+> 1. **In the browser, on download:** "WordLookup.exe isn't commonly downloaded." In Edge, click the **⋯** next to the file → **Keep**. In Chrome, **⌄** → **Keep**.
+> 2. **On first run:** the blue SmartScreen box. Click **More info** → **Run anyway**.
+>
+> **Verify what you downloaded.** Every release lists its SHA256 in the release notes. Check it before running:
+>
+> ```powershell
+> Get-FileHash .\WordLookup.exe -Algorithm SHA256
+> ```
+>
+> If it matches the release, the file is exactly what [`.github/workflows/release.yml`](.github/workflows/release.yml) built from the tagged source — nothing was altered in transit. Note the hash won't match a build you make yourself: PyInstaller embeds timestamps and build paths, so builds aren't byte-reproducible.
+>
+> Prefer not to trust a binary at all? Use Option B and run the source, which is entirely in this repo.
 
 ### Option B — run from source (recommended)
 
@@ -96,6 +109,7 @@ Either way a tray icon appears (a native glyph of your chosen language — ಕ, 
 | Select text → **your lookup shortcut** | Same, for laptops — set it yourself, see above |
 | **Ctrl+Alt+K** or tray menu → *Enabled* | Toggle ON/OFF globally |
 | Tray menu → *Change shortcuts…* | Rebind the lookup and toggle keys |
+| Tray menu → *Translation language* | Switch target language — takes effect on the next lookup |
 | Tray menu → *Open word register* | Browse every word you've looked up |
 | Tray menu → *Quit* | Exit |
 
@@ -105,7 +119,9 @@ The toggle shortcut keeps working while the tool is OFF — otherwise there'd be
 
 ## Word register
 
-Every lookup is saved. Tray menu → **Open word register** opens a self-contained HTML page (`data/register.html`) in your browser: word, part of speech, English meaning, English example, synonyms, translation, and the native example — searchable, newest first. Good for revisiting and actually learning the words you looked up.
+Every lookup is saved. Tray menu → **Open word register** opens a self-contained HTML page in your browser: word, part of speech, English meaning, English example, synonyms, translation, and the native example — searchable, newest first. Good for revisiting and actually learning the words you looked up.
+
+The page is written to `data/register-<timestamp>.html`, a fresh filename each time, and the previous one is deleted. The timestamp is not cosmetic: Windows resolves a `file://` URL for an `.html` path through the file-type handler, which launches the browser with the bare path and discards any cache-busting query on the URL. With a constant filename the browser kept serving its cached render, so the register appeared frozen while the file on disk was current — changing the *filename* is the only part of that Windows preserves.
 
 ## Offline cache
 

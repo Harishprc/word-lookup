@@ -78,6 +78,7 @@ _FULL_JSON = (
     '"synonyms": ["power", "might", "force"], '
     '"example_en": "She has the strength to lift it.", '
     '"translation": "ಶಕ್ತಿ", '
+    '"synonyms_native": ["ಬಲ", "ಸಾಮರ್ಥ್ಯ"], '
     '"example_native": "ಅವನಿಗೆ ತುಂಬಾ ಶಕ್ತಿ ಇದೆ."}'
 )
 
@@ -100,6 +101,56 @@ def test_gemini_happy_path_full_card():
     prompt = body["contents"][0]["parts"][0]["text"]
     assert "strength" in prompt
     assert "part_of_speech" in prompt
+
+
+def test_gemini_parses_native_synonyms():
+    with patch(
+        "kannada_lookup.translator.requests.post",
+        return_value=_response(200, _gemini_payload(_FULL_JSON)),
+    ) as post:
+        result = GeminiProvider("k", "m", "Kannada").lookup("strength")
+    assert result.synonyms_native == "ಬಲ, ಸಾಮರ್ಥ್ಯ"  # list joined
+    assert result.synonyms == "power, might, force"  # English half untouched
+    prompt = post.call_args.kwargs["json"]["contents"][0]["parts"][0]["text"]
+    assert "synonyms_native" in prompt
+
+
+def test_gemini_native_synonyms_accept_a_plain_string():
+    """Same list-or-string tolerance the English synonyms field has had."""
+    raw = '{"translation": "ಶಕ್ತಿ", "synonyms_native": "ಬಲ, ಸಾಮರ್ಥ್ಯ"}'
+    with patch(
+        "kannada_lookup.translator.requests.post",
+        return_value=_response(200, _gemini_payload(raw)),
+    ):
+        result = GeminiProvider("k", "m", "Kannada").lookup("strength")
+    assert result.synonyms_native == "ಬಲ, ಸಾಮರ್ಥ್ಯ"
+
+
+def test_gemini_native_synonyms_drop_the_translation_itself():
+    """Models sometimes echo the translation back as its own synonym,
+    which renders as a duplicate directly under it on the card."""
+    raw = (
+        '{"translation": "ಶಕ್ತಿ", '
+        '"synonyms_native": ["ಶಕ್ತಿ", "ಬಲ"]}'
+    )
+    with patch(
+        "kannada_lookup.translator.requests.post",
+        return_value=_response(200, _gemini_payload(raw)),
+    ):
+        result = GeminiProvider("k", "m", "Kannada").lookup("strength")
+    assert result.synonyms_native == "ಬಲ"
+
+
+def test_gemini_missing_native_synonyms_is_not_an_error():
+    """Older providers and multi-word phrases legitimately omit it; the
+    card hides the row rather than failing the lookup."""
+    raw = '{"translation": "ಶಕ್ತಿ", "meaning": "power"}'
+    with patch(
+        "kannada_lookup.translator.requests.post",
+        return_value=_response(200, _gemini_payload(raw)),
+    ):
+        result = GeminiProvider("k", "m", "Kannada").lookup("strength")
+    assert result.synonyms_native == ""
 
 
 def test_gemini_prompt_uses_configured_language():
@@ -264,6 +315,7 @@ _RESULT = LookupResult(
     synonyms="power, might",
     example_en="She has great strength.",
     example_native="ಅವನಿಗೆ ಶಕ್ತಿ ಇದೆ.",
+    synonyms_native="ಬಲ, ಸಾಮರ್ಥ್ಯ",
 )
 
 
@@ -295,6 +347,53 @@ def test_store_roundtrip_and_normalization(tmp_path):
     assert store.get("unseen-word", "Kannada") is None
     # Per-language keying: same word, other language = miss.
     assert store.get("strength", "Hindi") is None
+
+
+def test_store_migrates_a_pre_v4_db_without_losing_rows(tmp_path):
+    """Adding synonyms_native must not disturb existing rows: they are
+    served from cache and never refetched, so the column simply stays
+    empty for them rather than being backfilled with a guess."""
+    db = tmp_path / "old.db"
+    con = sqlite3.connect(db)
+    con.execute(
+        """CREATE TABLE lookups_v2 (
+            language TEXT NOT NULL, key TEXT NOT NULL,
+            original TEXT NOT NULL, translation TEXT NOT NULL,
+            part_of_speech TEXT NOT NULL DEFAULT '',
+            meaning TEXT NOT NULL DEFAULT '',
+            synonyms TEXT NOT NULL DEFAULT '',
+            example_en TEXT NOT NULL DEFAULT '',
+            example_native TEXT NOT NULL DEFAULT '',
+            provider TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL DEFAULT 0,
+            deleted INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (language, key))"""
+    )
+    con.execute(
+        "INSERT INTO lookups_v2 (language, key, original, translation, "
+        "synonyms, created_at) VALUES ('Kannada', 'sky', 'Sky', 'ಆಕಾಶ', "
+        "'heavens', 1000.0)"
+    )
+    con.commit()
+    con.close()
+
+    store = LookupStore(db)  # runs the migration
+    got = store.get("sky", "Kannada")
+    assert got.translation == "ಆಕಾಶ"
+    assert got.synonyms == "heavens"  # pre-existing data intact
+    assert got.synonyms_native == ""  # new column, no invented value
+    assert len(store.all_entries()) == 1
+
+
+def test_store_migration_is_idempotent(tmp_path):
+    """Migrations run on every launch, not once."""
+    db = tmp_path / "t.db"
+    LookupStore(db).put(_RESULT, "Kannada", provider="test")
+    for _ in range(3):
+        store = LookupStore(db)
+    assert store.get("strength", "Kannada").synonyms_native == "ಬಲ, ಸಾಮರ್ಥ್ಯ"
+    assert len(store.all_entries()) == 1
 
 
 def test_store_migrates_v1_rows(tmp_path):
@@ -469,6 +568,22 @@ def test_register_default_path_is_unique_per_call(tmp_path, monkeypatch):
     assert second.exists()
 
 
+def test_register_never_reuses_a_filename(tmp_path, monkeypatch):
+    """Uniqueness has to be monotonic, not just "not currently on disk".
+
+    Two calls can land in the same millisecond, and because _clean_stale
+    deletes the previous file, an exists()-based check would hand out an
+    earlier name again — while the browser may still hold that very name
+    cached, which is the failure this whole scheme exists to prevent.
+    """
+    monkeypatch.setattr(register, "OUT_DIR", tmp_path)
+    store = LookupStore(tmp_path / "t.db")
+    store.put(_RESULT, "Kannada", provider="test")
+
+    names = [register.generate(store).name for _ in range(50)]
+    assert len(set(names)) == len(names)
+
+
 def test_register_cleans_up_earlier_files(tmp_path, monkeypatch):
     """Without cleanup, every "Open word register" click would leave a new
     file behind forever."""
@@ -504,6 +619,31 @@ def test_register_cleanup_ignores_a_locked_file(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "unlink", locked_unlink)
     second = register.generate(store)  # must not raise
     assert second.exists()
+
+
+def test_generate_and_open_opens_a_raw_path_not_a_uri(tmp_path, monkeypatch):
+    """Pins the actual fix. Reproduced live on a real machine:
+    QDesktopServices.openUrl(QUrl.fromLocalFile(path)) reported success but
+    opened nothing, and feeding the SAME file:// string to plain
+    os.startfile() also opened nothing — so a file:// URI is unreliable on
+    Windows independent of Qt. os.startfile() on the bare path worked
+    every time. webbrowser.open() calls os.startfile() with whatever
+    string it's given, so the only thing that matters here is that the
+    string reaching it is a plain path — never something built with
+    QUrl.fromLocalFile or pathlib's .as_uri()."""
+    monkeypatch.setattr(register, "OUT_DIR", tmp_path)
+    opened = {}
+    monkeypatch.setattr(
+        "webbrowser.open", lambda target: opened.setdefault("target", target)
+    )
+
+    store = LookupStore(tmp_path / "t.db")
+    store.put(_RESULT, "Kannada", provider="test")
+    returned_path = register.generate_and_open(store)
+
+    assert opened["target"] == str(returned_path)
+    assert not opened["target"].startswith("file:")  # the actual regression
+    assert returned_path.exists()
 
 
 def test_register_empty_store(tmp_path):

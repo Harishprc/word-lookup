@@ -20,7 +20,7 @@ Wire format (`lookups.json` inside the gist)::
       {"language": "Kannada", "key": "sky", "original": "Sky",
        "translation": "ಆಕಾಶ", "partOfSpeech": "noun", "meaning": "...",
        "synonyms": "...", "exampleEn": "...", "exampleNative": "...",
-       "provider": "GeminiProvider",
+       "synonymsNative": "...", "provider": "GeminiProvider",
        "createdAt": 1739000000000, "updatedAt": 1739000000000,
        "deleted": false}, ...
     ]}
@@ -68,6 +68,8 @@ def _to_wire(row: dict) -> dict:
         "synonyms": row["synonyms"],
         "exampleEn": row["example_en"],
         "exampleNative": row["example_native"],
+        # .get: rows written before the v4 column existed lack the key.
+        "synonymsNative": row.get("synonyms_native", ""),
         "provider": row["provider"],
         "createdAt": round(row["created_at"] * 1000),
         "updatedAt": round(row["updated_at"] * 1000),
@@ -87,6 +89,8 @@ def _from_wire(entry: dict) -> dict:
         "synonyms": entry.get("synonyms", ""),
         "example_en": entry.get("exampleEn", ""),
         "example_native": entry.get("exampleNative", ""),
+        # Absent in payloads from a device still on the pre-v4 schema.
+        "synonyms_native": entry.get("synonymsNative", ""),
         "provider": entry.get("provider", ""),
         "created_at": entry["createdAt"] / 1000,
         "updated_at": entry["updatedAt"] / 1000,
@@ -100,7 +104,15 @@ def _from_wire(entry: dict) -> dict:
 def _tiebreak_key(entry: dict) -> str:
     return "|".join(
         str(entry.get(f, ""))
-        for f in ("original", "translation", "meaning", "synonyms", "exampleEn", "exampleNative")
+        for f in (
+            "original",
+            "translation",
+            "meaning",
+            "synonyms",
+            "exampleEn",
+            "exampleNative",
+            "synonymsNative",
+        )
     )
 
 

@@ -108,7 +108,8 @@ def refresh_language() -> None:
 
 # --- Provider -----------------------------------------------------------
 # "gemini" (default): Gemini API with a free Google AI Studio key —
-#   meaning + example sentence, ~1,500 free lookups/day, no credit card.
+#   meaning + example sentence, free tier, no credit card. The exact
+#   allowance depends on GEMINI_MODEL below.
 # "google": legacy Cloud Translation v2 fallback (needs GCP billing).
 # Future paid LLM providers (Claude/GPT) slot in here the same way.
 PROVIDER = os.getenv("PROVIDER", "gemini").strip().lower()

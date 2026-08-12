@@ -14,10 +14,17 @@ from pathlib import Path
 from tempfile import gettempdir
 
 from PySide6.QtCore import QLockFile, QObject, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
+from PySide6.QtGui import (
+    QAction,
+    QActionGroup,
+    QColor,
+    QIcon,
+    QPainter,
+    QPixmap,
+)
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-from . import capture, config, hotkeys
+from . import capture, config, hotkeys, languages
 from .hook import KeyComboHook, XButtonHook
 from .popup import LookupPopup
 from .translator import LookupFailed, make_provider
@@ -32,7 +39,6 @@ class Bridge(QObject):
     toggle_requested = Signal()          # toggle shortcut (hook thread)
     lookup_done = Signal(object)         # LookupResult (worker thread)
     lookup_failed = Signal(str)          # message (worker thread)
-    sync_finished = Signal(bool, str)    # (ran, message) — worker thread
 
 
 def _tray_icon(active: bool) -> QIcon:
@@ -73,7 +79,6 @@ class App:
         self.bridge.toggle_requested.connect(self._toggle)
         self.bridge.lookup_done.connect(self._on_done)
         self.bridge.lookup_failed.connect(self._on_failed)
-        self.bridge.sync_finished.connect(self._on_sync_finished)
 
         self._build_tray()
 
@@ -88,10 +93,8 @@ class App:
         self.key_hook = None
         self._install_shortcuts()
 
-        # Startup sync — silent (no popup) since it's routine, not a user
-        # action; the tray "Sync now" item gives feedback for the manual
-        # case. No-ops instantly if GITHUB_PAT isn't set.
-        self._run_sync(announce=False)
+        # Startup sync. No-ops instantly if GITHUB_PAT isn't set.
+        self._run_sync()
 
     # --- keyboard shortcuts ----------------------------------------------
 
@@ -154,13 +157,11 @@ class App:
         shortcuts_action.triggered.connect(self._change_shortcuts)
         menu.addAction(shortcuts_action)
 
+        self._build_language_menu(menu)
+
         register_action = QAction("Open word register", menu)
         register_action.triggered.connect(self._open_register)
         menu.addAction(register_action)
-
-        sync_action = QAction("Sync now", menu)
-        sync_action.triggered.connect(lambda: self._run_sync(announce=True))
-        menu.addAction(sync_action)
 
         menu.addSeparator()
         quit_action = QAction("Quit", menu)
@@ -171,6 +172,41 @@ class App:
         self._menu = menu  # keep a reference; tray does not own it
         self._sync_tray()
         self.tray.show()
+
+    def _build_language_menu(self, menu):
+        """Submenu to switch target language without deleting settings.json
+        and restarting, which was the only way before."""
+        lang_menu = menu.addMenu("Translation language")
+        self._lang_group = QActionGroup(menu)
+        self._lang_group.setExclusive(True)
+
+        for entry in languages.LANGUAGES:
+            action = QAction(
+                f"{entry['glyph']}   {entry['name']}", menu, checkable=True
+            )
+            action.setChecked(entry["name"] == config.TARGET_LANGUAGE)
+            # name= binds per-iteration; a bare closure would capture the
+            # loop variable and every item would pick the last language.
+            action.triggered.connect(
+                lambda _checked=False, name=entry["name"]: self._change_language(name)
+            )
+            self._lang_group.addAction(action)
+            lang_menu.addAction(action)
+
+    def _change_language(self, name: str):
+        if name == config.TARGET_LANGUAGE:
+            return
+        config.save_settings(name)  # persists, then refreshes config globals
+
+        # The provider is cached and takes the language at construction
+        # (make_provider reads config.TARGET_LANGUAGE), so without dropping
+        # it here every later lookup would keep translating into the old
+        # language while the tray icon claimed otherwise. The cache itself
+        # is keyed per-language, so nothing already stored is lost.
+        self._provider = None
+
+        self._sync_tray()  # repaints the glyph and updates the tooltip
+        self.popup.show_message(f"Language: {name}")
 
     def _sync_tray(self):
         on = self.enabled.is_set()
@@ -200,44 +236,32 @@ class App:
             self.popup.show_message("Shortcuts updated")
 
     def _open_register(self):
-        """Regenerate the HTML word register and open it in the browser."""
-        from PySide6.QtCore import QUrl
-        from PySide6.QtGui import QDesktopServices
-
+        """Regenerate the HTML word register and open it in the browser.
+        See register.generate_and_open for why this opens a raw path and
+        never a file:// URI."""
         from . import register
 
-        # register.generate() names the file register-<timestamp>.html — a
-        # ?query cache-buster on the URL was tried first, but on Windows a
-        # file:// URL for a locally-associated extension is resolved
-        # through the file-type handler, which launches the browser as
-        # `browser.exe --single-argument <path>` and silently drops the
-        # URL wrapper (query included). Only the path itself survives that
-        # hop, so the filename is what has to change, not the URL.
-        path = register.generate()
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+        register.generate_and_open()
 
     # --- sync -------------------------------------------------------------
 
-    def _run_sync(self, announce: bool):
+    def _run_sync(self):
         """Runs sync.sync_now() on a worker thread — it's a network call,
-        must never block the GUI thread. `announce` controls whether the
-        result shows a popup: silent for the automatic startup sync,
-        visible for the manual tray action."""
+        must never block the GUI thread.
+
+        Fires once at startup and reports nothing: sync is opt-in (it
+        no-ops entirely without GITHUB_PAT) and a popup on every launch
+        would be noise. Failures are swallowed for the same reason they
+        always were — sync must never take a lookup down with it."""
         def worker():
             try:
                 from . import sync
 
-                ran = sync.sync_now()
-                message = "Synced" if ran else "Sync skipped — no GITHUB_PAT set"
-            except Exception as e:  # sync must never crash the app
-                ran, message = False, f"Sync failed: {e}"
-            if announce:
-                self.bridge.sync_finished.emit(ran, message)
+                sync.sync_now()
+            except Exception:  # sync must never crash the app
+                pass
 
         threading.Thread(target=worker, daemon=True).start()
-
-    def _on_sync_finished(self, ran: bool, message: str):
-        self.popup.show_message(message)
 
     # --- toggle ----------------------------------------------------------
 

@@ -67,9 +67,41 @@ jobs:
           name: WordLookup-exe
           path: dist/WordLookup.exe
 
+      # The exe is unsigned, so Windows shows a "not commonly downloaded"
+      # reputation warning and there is no certificate for a downloader to
+      # check. A published checksum is the one verifiable fact we can give
+      # them: it proves the file they got is the file this workflow built
+      # from this tag, unmodified in transit or on the release page.
+      #
+      # Note it does NOT let anyone reproduce the build locally — PyInstaller
+      # embeds timestamps and build paths, so two builds of identical source
+      # differ. This attests the artifact, not the build.
+      - name: Compute SHA256
+        id: checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash dist\WordLookup.exe -Algorithm SHA256).Hash.ToLower()
+          "sha256=$hash" >> $env:GITHUB_OUTPUT
+          Write-Host "SHA256: $hash"
+
       - name: Publish Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          # Exactly one asset. The checksum goes in the release body instead
+          # of a sidecar file, so the download page shows a single
+          # unambiguous thing to click.
           files: dist/WordLookup.exe
           generate_release_notes: true
+          append_body: true
+          body: |
+            **SHA256** `${{ steps.checksum.outputs.sha256 }}`
+
+            Verify before running (PowerShell):
+            ```powershell
+            Get-FileHash .\WordLookup.exe -Algorithm SHA256
+            ```
+
+            Windows will warn that this file "isn't commonly downloaded" —
+            the build is unsigned, which is a reputation warning, not a
+            malware detection. See the README's Install section.
