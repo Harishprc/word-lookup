@@ -27,6 +27,7 @@ LANGUAGES = [
     {"name": "Spanish",    "code": "es", "glyph": "Ñ"},
     {"name": "French",     "code": "fr", "glyph": "Ç"},
     {"name": "German",     "code": "de", "glyph": "ß"},
+    {"name": "Swedish",    "code": "sv", "glyph": "Å"},
     {"name": "Japanese",   "code": "ja", "glyph": "あ"},
     {"name": "Korean",     "code": "ko", "glyph": "한"},
     {"name": "Chinese (Simplified)", "code": "zh", "glyph": "中"},
@@ -52,3 +53,53 @@ def get(name: str) -> dict:
     if entry:
         return entry
     return {"name": name, "code": "", "glyph": (name[:1].upper() or "?")}
+
+
+# Unicode ranges a translation into this language must actually touch.
+#
+# Defined only where the target script differs from English's — a Latin
+# target (Swedish, Spanish, German…) shares the ASCII range with the input
+# word, so there is nothing a range check could prove. Absent from this
+# table means "not checkable", which is treated as valid.
+#
+# This exists because models answer in the wrong script: asking for the
+# Kannada for "suppression" returned "दमन", which is Devanagari — correct
+# word, wrong alphabet, useless to a Kannada reader. It is cheap to detect
+# (no model call) and the wrong script is unambiguous, unlike "is this the
+# best word", which we deliberately do NOT try to judge here.
+SCRIPT_RANGES = {
+    "Kannada":   [(0x0C80, 0x0CFF)],
+    "Hindi":     [(0x0900, 0x097F)],
+    "Marathi":   [(0x0900, 0x097F)],
+    "Tamil":     [(0x0B80, 0x0BFF)],
+    "Telugu":    [(0x0C00, 0x0C7F)],
+    "Malayalam": [(0x0D00, 0x0D7F)],
+    "Bengali":   [(0x0980, 0x09FF)],
+    "Gujarati":  [(0x0A80, 0x0AFF)],
+    "Punjabi":   [(0x0A00, 0x0A7F)],
+    "Odia":      [(0x0B00, 0x0B7F)],
+    "Urdu":      [(0x0600, 0x06FF), (0x0750, 0x077F)],
+    "Arabic":    [(0x0600, 0x06FF), (0x0750, 0x077F)],
+    "Russian":   [(0x0400, 0x04FF)],
+    "Thai":      [(0x0E00, 0x0E7F)],
+    "Korean":    [(0xAC00, 0xD7AF), (0x1100, 0x11FF)],
+    # Japanese mixes three scripts in ordinary text and a single word may
+    # legitimately be written in any one of them, so all three count.
+    "Japanese":  [(0x3040, 0x309F), (0x30A0, 0x30FF), (0x4E00, 0x9FFF)],
+    "Chinese (Simplified)": [(0x4E00, 0x9FFF), (0x3400, 0x4DBF)],
+}
+
+
+def uses_expected_script(text: str, language: str) -> bool:
+    """True when `text` contains at least one character of `language`'s
+    script — or when that language has no checkable script (Latin targets,
+    or a name not in LANGUAGES), in which case there is nothing to reject.
+
+    Deliberately "at least one", not "every character": real translations
+    mix in digits, punctuation, and sometimes a Latin acronym, and any of
+    those would make an all-characters rule reject valid answers.
+    """
+    ranges = SCRIPT_RANGES.get(language)
+    if not ranges:
+        return True
+    return any(lo <= ord(c) <= hi for c in text for lo, hi in ranges)

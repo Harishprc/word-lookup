@@ -32,6 +32,7 @@ class Bridge(QObject):
     toggle_requested = Signal()          # toggle shortcut (hook thread)
     lookup_done = Signal(object)         # LookupResult (worker thread)
     lookup_failed = Signal(str)          # message (worker thread)
+    sync_finished = Signal(bool, str)    # (ran, message) — worker thread
 
 
 def _tray_icon(active: bool) -> QIcon:
@@ -72,6 +73,7 @@ class App:
         self.bridge.toggle_requested.connect(self._toggle)
         self.bridge.lookup_done.connect(self._on_done)
         self.bridge.lookup_failed.connect(self._on_failed)
+        self.bridge.sync_finished.connect(self._on_sync_finished)
 
         self._build_tray()
 
@@ -83,47 +85,55 @@ class App:
         # Keyboard shortcuts go through the same suppressing hook as the
         # mouse button, so the chord never reaches the focused app. Both
         # are optional and rebuilt in place when the user changes them.
-        self.lookup_hook = None
-        self.toggle_hook = None
+        self.key_hook = None
         self._install_shortcuts()
+
+        # Startup sync — silent (no popup) since it's routine, not a user
+        # action; the tray "Sync now" item gives feedback for the manual
+        # case. No-ops instantly if GITHUB_PAT isn't set.
+        self._run_sync(announce=False)
 
     # --- keyboard shortcuts ----------------------------------------------
 
     def _install_shortcuts(self):
         """(Re)bind the lookup and toggle shortcuts from current config.
 
-        Called at startup and again after the recorder saves, so changing
-        a shortcut takes effect without restarting the app.
+        Both share a single OS-level hook (KeyComboHook) instead of one
+        installation each. Called at startup and again after the recorder
+        saves, so changing a shortcut takes effect without restarting.
         """
-        for attr in ("lookup_hook", "toggle_hook"):
-            existing = getattr(self, attr, None)
-            if existing is not None:
-                try:
-                    existing.stop()
-                except Exception:
-                    pass  # a listener that never started can't be stopped
-                setattr(self, attr, None)
+        if self.key_hook is not None:
+            try:
+                self.key_hook.stop()
+            except Exception:
+                pass  # a listener that never started can't be stopped
+            self.key_hook = None
+
+        bindings = []
 
         lookup = hotkeys.parse(config.LOOKUP_HOTKEY)
         if lookup is not None:
-            self.lookup_hook = KeyComboHook(
+            bindings.append((
                 lookup,
                 # The shortcut's own key is still held when this fires;
                 # pass it along so the copy chord isn't polluted.
                 lambda vk=lookup.vk: self.bridge.triggered.emit((vk,)),
                 self.enabled,
-            )
-            self.lookup_hook.start()
+                False,
+            ))
 
         toggle = hotkeys.parse(config.TOGGLE_HOTKEY)
         if toggle is not None:
-            self.toggle_hook = KeyComboHook(
+            bindings.append((
                 toggle,
                 self.bridge.toggle_requested.emit,
                 self.enabled,
-                always_on=True,  # must work while the tool is OFF
-            )
-            self.toggle_hook.start()
+                True,  # always_on — must work while the tool is OFF
+            ))
+
+        if bindings:
+            self.key_hook = KeyComboHook(bindings)
+            self.key_hook.start()
 
     # --- tray -----------------------------------------------------------
 
@@ -147,6 +157,10 @@ class App:
         register_action = QAction("Open word register", menu)
         register_action.triggered.connect(self._open_register)
         menu.addAction(register_action)
+
+        sync_action = QAction("Sync now", menu)
+        sync_action.triggered.connect(lambda: self._run_sync(announce=True))
+        menu.addAction(sync_action)
 
         menu.addSeparator()
         quit_action = QAction("Quit", menu)
@@ -192,8 +206,38 @@ class App:
 
         from . import register
 
+        # register.generate() names the file register-<timestamp>.html — a
+        # ?query cache-buster on the URL was tried first, but on Windows a
+        # file:// URL for a locally-associated extension is resolved
+        # through the file-type handler, which launches the browser as
+        # `browser.exe --single-argument <path>` and silently drops the
+        # URL wrapper (query included). Only the path itself survives that
+        # hop, so the filename is what has to change, not the URL.
         path = register.generate()
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+
+    # --- sync -------------------------------------------------------------
+
+    def _run_sync(self, announce: bool):
+        """Runs sync.sync_now() on a worker thread — it's a network call,
+        must never block the GUI thread. `announce` controls whether the
+        result shows a popup: silent for the automatic startup sync,
+        visible for the manual tray action."""
+        def worker():
+            try:
+                from . import sync
+
+                ran = sync.sync_now()
+                message = "Synced" if ran else "Sync skipped — no GITHUB_PAT set"
+            except Exception as e:  # sync must never crash the app
+                ran, message = False, f"Sync failed: {e}"
+            if announce:
+                self.bridge.sync_finished.emit(ran, message)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_sync_finished(self, ran: bool, message: str):
+        self.popup.show_message(message)
 
     # --- toggle ----------------------------------------------------------
 
@@ -246,9 +290,8 @@ class App:
 
     def _quit(self):
         self.hook.stop()
-        for hook in (self.lookup_hook, self.toggle_hook):
-            if hook is not None:
-                hook.stop()
+        if self.key_hook is not None:
+            self.key_hook.stop()
         self.tray.hide()
         self.qapp.quit()
 

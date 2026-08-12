@@ -193,12 +193,14 @@ _RISKY_APP = {
 }
 
 
-def risk_warning(text: str) -> str | None:
+def risk_warning(text: str, suppressed: bool = True) -> str | None:
     """Human-readable reason this shortcut is a bad idea, or None.
 
-    On Windows the hook swallows the chord, so an app collision is mostly
-    theoretical — but suppression is impossible on X11 and can be missed
-    during a focus change, so the warning is still worth showing.
+    Where the hook swallows the chord (`suppressed=True`), an app collision
+    is mostly theoretical. Where it doesn't — X11 can't intercept at all,
+    and suppression can be missed during a focus change even where it's
+    normally supported — the chord also reaches the app, so the warning
+    says that instead of offering false reassurance.
     """
     combo = parse(text)
     if combo is None:
@@ -208,8 +210,12 @@ def risk_warning(text: str) -> str | None:
     if canonical in _RISKY_EXACT:
         return _RISKY_EXACT[canonical]
     if canonical in _RISKY_APP:
-        return _RISKY_APP[canonical] + " Word Lookup swallows the key on " \
-                                       "Windows, so this is usually safe here."
+        if suppressed:
+            return _RISKY_APP[canonical] + " Word Lookup swallows the key " \
+                                           "here, so this is usually safe."
+        return _RISKY_APP[canonical] + " This shortcut is NOT swallowed on " \
+                                       "this system, so it will also reach " \
+                                       "that app."
     if combo.meta:
         return ("Windows reserves most Win-key shortcuts and handles them "
                 "before any program sees them.")

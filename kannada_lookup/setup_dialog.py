@@ -68,7 +68,9 @@ class ShortcutRow:
         self.edit.keySequenceChanged.connect(self._check)
 
     def _check(self):
-        message = hotkeys.risk_warning(self.text())
+        message = hotkeys.risk_warning(
+            self.text(), getattr(backend, "SUPPRESSES_HOTKEY", True)
+        )
         if message:
             self.warning.setText("⚠ " + message)
             self.warning.show()

@@ -12,12 +12,17 @@ from pathlib import Path
 
 from .store import DB_PATH, LookupStore
 
-OUT_PATH = DB_PATH.parent / "register.html"
+OUT_DIR = DB_PATH.parent
+_STEM = "register"
 
 _PAGE = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- Regenerated on every open, so a cached copy is always the stale one.
+     Belt-and-braces with the cache-busting query main.py appends: this
+     covers a manual reload or a bookmark, which carry no query. -->
+<meta http-equiv="cache-control" content="no-store">
 <title>Word Register</title>
 <style>
   :root {{ color-scheme: light; }}
@@ -98,8 +103,30 @@ _ROW = """    <tr>
     </tr>"""
 
 
-def generate(store: LookupStore | None = None, out_path: Path = OUT_PATH) -> Path:
+def generate(store: LookupStore | None = None, out_path: Path | None = None) -> Path:
+    """Write the register and return its path.
+
+    Filename carries a timestamp (register-<epoch>.html) instead of the
+    fixed `register.html` this used to be. Windows resolves a file:// URL
+    for an .html path through the file-type association handler, which
+    invokes the browser as `browser.exe --single-argument <path>` — the
+    URL wrapper (and any ?query cache-buster on it) never reaches the
+    browser at all, only the bare path. With a constant filename every
+    open was therefore byte-identical from the browser's point of view,
+    so it kept reusing its cached render no matter how fresh the file on
+    disk actually was. A path that changes on every generate() is the
+    only part of this Windows won't silently discard.
+
+    Stale copies are deleted after the new one is written (not before —
+    deleting first would leave a moment with no valid file to open).
+    """
     store = store or LookupStore()
+    if out_path is None:
+        # Milliseconds, not whole seconds: two generate() calls inside the
+        # same wall-clock second (a script, or a very fast double-click)
+        # would otherwise collide on the same filename and silently
+        # reintroduce the exact bug this scheme exists to fix.
+        out_path = OUT_DIR / f"{_STEM}-{int(time.time() * 1000)}.html"
     rows = []
     entries = store.all_entries()
     for entry in entries:
@@ -132,4 +159,19 @@ def generate(store: LookupStore | None = None, out_path: Path = OUT_PATH) -> Pat
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(page, encoding="utf-8")
+    _clean_stale(out_path)
     return out_path
+
+
+def _clean_stale(current: Path) -> None:
+    """Remove earlier register-*.html files, keeping only the one just
+    written. Best-effort: a locked file (still open in a browser tab from
+    a previous click) is left for next time rather than raising — a
+    leftover file is harmless, an unhandled exception here would take
+    down the whole "open register" action over cache hygiene."""
+    for old in current.parent.glob(f"{_STEM}-*.html"):
+        if old != current:
+            try:
+                old.unlink()
+            except OSError:
+                pass

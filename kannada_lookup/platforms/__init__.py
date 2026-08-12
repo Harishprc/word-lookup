@@ -14,8 +14,11 @@ Each backend module exposes the same surface:
                                 # release_vks are keys the user is still
                                 # holding from a keyboard trigger
   make_listener(on_down, enabled) -> pynput.mouse.Listener
-  make_key_listener(combo, on_trigger, enabled) -> listener
-                                # combo is a hotkeys.Combo
+  make_key_listener(bindings) -> listener
+                                # bindings is a list of
+                                # (combo, on_trigger, enabled) triples;
+                                # combo is a hotkeys.Combo. One listener
+                                # serves every bound shortcut.
   SUPPRESSES_CLICK: bool        # False where the OS can't swallow events
   SUPPRESSES_HOTKEY: bool       # ditto for the keyboard shortcut
 

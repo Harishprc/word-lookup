@@ -1,6 +1,10 @@
 # Secrets and personal data — never commit these.
 .env
-data/
+# Leading slash anchors this to the repo root (data/lookups.db,
+# settings.json, register.html). Without it git matches a directory named
+# "data" at ANY depth, silently swallowing anything else in the repo that
+# happens to have one.
+/data/
 *.pdf
 *.db
 

@@ -22,6 +22,10 @@ SUPPRESSES_CLICK = False
 # cannot consume, so the shortcut ALSO reaches the focused app. The
 # recorder warns the user about this when the flag is False.
 SUPPRESSES_HOTKEY = False
+# change_token() is a content compare here, so capture.py can't tell "the
+# selection copied but happened to match what was already on the
+# clipboard" apart from "nothing was selected". See capture.grab_selection.
+TOKEN_IS_CONTENT = True
 
 _kbd = Controller()
 
@@ -47,7 +51,11 @@ def read_text():
 
 
 def write_text(text):
-    data = (text or "").encode("utf-8")
+    # None means the original clipboard content couldn't be read — leave
+    # the clipboard alone rather than overwriting it with an empty string.
+    if text is None:
+        return
+    data = text.encode("utf-8")
     try:
         if _HAS_XCLIP:
             subprocess.run(["xclip", "-selection", "clipboard"],
@@ -65,12 +73,20 @@ def change_token():
 def send_copy(release_vks=()):
     for mod in (Key.shift, Key.shift_r, Key.alt):
         _kbd.release(mod)
-    # Keyboard-triggered lookups leave the chord's own keys held. Note the
-    # vks here are Windows codes and X11 keysyms differ, so this is
-    # best-effort — see win.send_copy for the reasoning.
+    # Keyboard-triggered lookups leave the chord's own keys held. `vk` is a
+    # Windows virtual-key code (hotkeys.Combo.vk) and X11 keysyms differ, so
+    # KeyCode.from_vk(vk) targets the wrong key in general. For letters/
+    # digits the Windows VK happens to equal the ASCII code, so
+    # KeyCode.from_char() releases the right key regardless of platform
+    # (pynput resolves the native keysym itself). Anything else (named/
+    # punctuation keys) has no reliable translation available —
+    # best-effort fall back to from_vk, same as before.
     for vk in release_vks:
         try:
-            _kbd.release(KeyCode.from_vk(vk))
+            if 0x30 <= vk <= 0x39 or 0x41 <= vk <= 0x5A:  # '0'-'9', 'A'-'Z'
+                _kbd.release(KeyCode.from_char(chr(vk).lower()))
+            else:
+                _kbd.release(KeyCode.from_vk(vk))
         except Exception:
             pass
     _kbd.press(Key.ctrl)
@@ -94,9 +110,11 @@ def make_listener(on_down, enabled):
     return mouse.Listener(on_click=_on_click)
 
 
-def make_key_listener(combo, on_trigger, enabled):
+def make_key_listener(bindings):
     """Observe-only hotkey listener, for the same reason as make_listener:
-    X11 delivers the chord to us AND to the focused app.
+    X11 delivers the chord to us AND to the focused app. `bindings` is a
+    list of (combo, on_trigger, enabled) triples — GlobalHotKeys already
+    accepts a dict of chords, so every bound shortcut shares one listener.
 
     GlobalHotKeys is the right tool here precisely because suppression is
     off the table anyway — on Windows and macOS we use a filtering hook
@@ -104,8 +122,15 @@ def make_key_listener(combo, on_trigger, enabled):
     """
     from pynput import keyboard
 
-    def _fire():
-        if enabled.is_set():
-            on_trigger()
+    def _make_fire(on_trigger, enabled):
+        def _fire():
+            if enabled.is_set():
+                on_trigger()
 
-    return keyboard.GlobalHotKeys({combo.pynput_text(): _fire})
+        return _fire
+
+    chords = {
+        combo.pynput_text(): _make_fire(on_trigger, enabled)
+        for combo, on_trigger, enabled in bindings
+    }
+    return keyboard.GlobalHotKeys(chords)

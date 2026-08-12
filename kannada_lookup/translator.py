@@ -24,7 +24,7 @@ from dataclasses import dataclass
 
 import requests
 
-from . import config
+from . import config, languages
 
 
 @dataclass(frozen=True)
@@ -59,6 +59,12 @@ class GeminiProvider(TranslationProvider):
         "{model}:generateContent"
     )
 
+    # The translation rules exist because weaker models invent
+    # plausible-looking words in low-resource scripts: asking for
+    # "restricted" in Kannada produced "ಮಿಚ್ಛಿತ / ನಿಯನ್ಶ್ರಿತ" — neither is a
+    # real word, and the second is a malformed consonant cluster that
+    # renders with a dotted circle (the Unicode orphaned-combining-mark
+    # marker). Naming the failure modes explicitly is what suppresses them.
     _PROMPT = (
         "You are an English-{language} dictionary. For the English word or "
         "phrase below, reply with ONLY this JSON:\n"
@@ -72,6 +78,17 @@ class GeminiProvider(TranslationProvider):
         '"example_native": "<one short, simple example sentence written in '
         "{language} that uses that word>\"}}\n"
         "For multi-word phrases, synonyms may be an empty list.\n\n"
+        "Rules for the {language} text:\n"
+        "- Give exactly ONE translation: the single most commonly used "
+        "word. Never offer alternatives, and never use a slash.\n"
+        "- It must be a real, standard {language} word that a native "
+        "speaker would recognise and a dictionary would list. If no true "
+        "equivalent exists, use the ordinary {language} phrase for the "
+        "idea rather than inventing a word.\n"
+        "- Write it in correct, well-formed {language} script. Never "
+        "spell the English word out phonetically in that script.\n"
+        "- Use only valid letter combinations for {language}. Do not "
+        "produce malformed clusters.\n\n"
         "English: {text}"
     )
 
@@ -85,22 +102,49 @@ class GeminiProvider(TranslationProvider):
         self._model = model
         self._language = language
 
+    # Appended to the prompt on the one retry after a wrong-script reply.
+    # Naming the mistake concretely works better than repeating the
+    # original instruction, which the model has already ignored once.
+    _RETRY_SUFFIX = (
+        "\n\nYour previous answer was written in the wrong alphabet. The "
+        "translation MUST be written in the {language} script itself, not "
+        "in the script of any other language, and not in Latin letters. "
+        "Reply again, in {language} script."
+    )
+
     def lookup(self, text: str) -> LookupResult:
+        result = self._request(text)
+        if languages.uses_expected_script(result.translation, self._language):
+            return result
+
+        # Wrong script is unambiguous and cheap to detect, and a wrong-script
+        # card is useless — the reader cannot even read it. Retry once with
+        # the mistake spelled out rather than caching the bad answer.
+        retried = self._request(
+            text, extra=self._RETRY_SUFFIX.format(language=self._language)
+        )
+        if languages.uses_expected_script(retried.translation, self._language):
+            return retried
+
+        # Still wrong: fail loudly instead of returning something unreadable.
+        # Raising also keeps it out of the cache, which is keyed by word only
+        # — a bad entry stored here would be served forever.
+        raise LookupFailed(
+            f"Model answered in the wrong script for {self._language} twice. "
+            "Try again, or switch GEMINI_MODEL in .env."
+        )
+
+    def _request(self, text: str, extra: str = "") -> LookupResult:
+        prompt = self._PROMPT.format(text=text, language=self._language) + extra
         try:
             resp = requests.post(
                 self.ENDPOINT.format(model=self._model),
-                params={"key": self._key},
+                headers={"x-goog-api-key": self._key},
                 json={
                     "contents": [
                         {
                             "role": "user",
-                            "parts": [
-                                {
-                                    "text": self._PROMPT.format(
-                                        text=text, language=self._language
-                                    )
-                                }
-                            ],
+                            "parts": [{"text": prompt}],
                         }
                     ],
                     # Forces raw JSON output — no prose, no markdown fences
@@ -184,7 +228,7 @@ class GoogleTranslateProvider(TranslationProvider):
         try:
             resp = requests.post(
                 self.ENDPOINT,
-                params={"key": self._key},
+                headers={"x-goog-api-key": self._key},
                 data={
                     "q": text,
                     "source": config.SOURCE_LANG,

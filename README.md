@@ -4,11 +4,11 @@ Select any English word or phrase in **any** app (PDF reader, Word, Slack, brows
 
 ## Supported languages
 
-25 target languages, picked once on first run and changeable by deleting `data/settings.json`. The tray icon becomes a native glyph of whichever you choose.
+26 target languages, picked once on first run and changeable by deleting `data/settings.json`. The tray icon becomes a native glyph of whichever you choose.
 
 **Indian languages** — Kannada (ಕ), Hindi (अ), Tamil (த), Telugu (త), Malayalam (മ), Marathi (म), Bengali (ব), Gujarati (ગ), Punjabi (ਪ), Odia (ଓ), Urdu (ا)
 
-**World languages** — Spanish (Ñ), French (Ç), German (ß), Japanese (あ), Korean (한), Chinese Simplified (中), Arabic (ع), Russian (Я), Portuguese (Ã), Italian (È), Turkish (Ş), Vietnamese (ơ), Thai (ท), Indonesian (ᬅ)
+**World languages** — Spanish (Ñ), French (Ç), German (ß), Swedish (Å), Japanese (あ), Korean (한), Chinese Simplified (中), Arabic (ع), Russian (Я), Portuguese (Ã), Italian (È), Turkish (Ş), Vietnamese (ơ), Thai (ท), Indonesian (ᬅ)
 
 The list is just a tidy dropdown — the language name is interpolated straight into the Gemini prompt, so any language the model knows works. Add your own in [`kannada_lookup/languages.py`](kannada_lookup/languages.py).
 
@@ -38,7 +38,7 @@ The recorder warns you if you pick something with a known cost (`Ctrl+W` closes 
 
 The first time you launch, a one-time setup dialog appears:
 
-1. **Pick your target language** from the dropdown (Kannada, Hindi, Tamil, Spanish, French, Japanese, … 25 total).
+1. **Pick your target language** from the dropdown (Kannada, Hindi, Tamil, Spanish, Swedish, Japanese, … 26 total).
 2. **Paste a Gemini API key** if `.env` doesn't have one yet.
 
 Both are saved (`data/settings.json` + `.env`) — the dialog never appears again unless you delete `data/settings.json`. Running from source, those live in the project folder; running the .exe, they live in `%LOCALAPPDATA%\WordLookup\`.
@@ -68,7 +68,11 @@ No manual `.env` editing needed — the first-run dialog above handles the API k
 
 **Getting the API key (free, ~1 minute):** [aistudio.google.com](https://aistudio.google.com) → sign in → **Get API key** → **Create API key**. No credit card, no cloud console.
 
-**Cost:** free tier is roughly **1,500 lookups/day**, permanently, no card required. Caveat: Google may use free-tier prompts to improve its models — fine for word lookups, don't select passwords. If Google ever rotates model names (a "model not found" popup), set `GEMINI_MODEL=gemini-2.5-flash` in `.env`.
+**Cost:** free, permanently, no card required. The default model is `gemini-flash-latest`; its free daily allowance runs to the hundreds of lookups, which is far more than normal reading generates — and repeat words are served from the local cache without touching the API at all.
+
+The cheaper `gemini-flash-lite-latest` has a higher cap (~1,500/day) but **invents plausible-looking words in low-resource scripts** — asking it for "restricted" in Kannada returned `ಮಿಚ್ಛಿತ / ನಿಯನ್ಶ್ರಿತ`, neither of which is a real word, the second being a malformed cluster that renders with a dotted circle. Set `GEMINI_MODEL=gemini-flash-lite-latest` in `.env` only if you need the quota more than the accuracy.
+
+Caveat: Google may use free-tier prompts to improve its models — fine for word lookups, don't select passwords. If Google ever rotates model names (a "model not found" popup), set `GEMINI_MODEL=gemini-2.5-flash` in `.env`.
 
 ## Run
 
@@ -115,7 +119,7 @@ Selected via `PROVIDER=` in `.env`; the factory in `kannada_lookup/translator.py
 
 | Provider | `.env` value | Cost | Returns |
 |---|---|---|---|
-| **Gemini** (default) | `gemini` | Free (~1,500/day, AI Studio key) | Full card: part of speech, meaning, synonyms, both examples, translation |
+| **Gemini** (default) | `gemini` | Free (AI Studio key, no card) | Full card: part of speech, meaning, synonyms, both examples, translation |
 | Google Cloud Translation | `google` | Free 500k chars/month, **needs GCP billing card** | Translation only |
 | Claude / GPT (future) | — | Paid ($5 min credit) | Same full card, no training on your data |
 
