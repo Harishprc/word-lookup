@@ -80,6 +80,47 @@ def test_wrong_script_rejected():
     assert not languages.uses_expected_script("suppression", "Kannada")
 
 
+def test_mixed_script_rejected_even_with_one_correct_character():
+    """flash-lite returned "कृतज्ञತೆ" for the Kannada translation of
+    "gratitude": four Devanagari characters (कृतज्ञ) followed by one real
+    Kannada syllable (ತೆ). An earlier version of this check only required
+    at least one character in the target script and passed it — this
+    pins the fix: at least one own-script character AND zero foreign."""
+    assert not languages.uses_expected_script("कृतज्ञತೆ", "Kannada")
+    # Same shape the other direction: real Devanagari (own, for Hindi)
+    # plus one stray Kannada character (foreign) must still be rejected.
+    assert not languages.uses_expected_script("दमಕ", "Hindi")
+
+
+def test_letter_from_an_unsupported_script_is_still_rejected():
+    """flash-lite returned "θಳಿಗೆದು" for the Kannada translation of
+    "fragile" — a Greek theta spliced into Kannada text. Greek isn't a
+    target language here, so a check that only knew about SCRIPT_RANGES
+    treated that character as neither own nor foreign and passed the
+    whole string. Foreign-ness is decided by Unicode letter category
+    instead, so any script counts, supported or not."""
+    assert not languages.uses_expected_script("θಳಿಗೆದು", "Kannada")
+    assert not languages.uses_expected_script("Ωಮನ", "Kannada")  # Greek omega
+    assert not languages.uses_expected_script("אಮನ", "Kannada")  # Hebrew
+
+
+def test_digits_punctuation_and_spaces_never_count_as_foreign():
+    """Only letters are checked — a real translation carries spaces,
+    a full stop, digits, and combining marks, and rejecting any of those
+    would fail valid answers."""
+    assert languages.uses_expected_script("ಅವಳಿಗೆ ಶಾಶ್ವತ ಕೆಲಸ ಸಿಕ್ಕಿದೆ.", "Kannada")
+    assert languages.uses_expected_script("ದಮನ (suppression), 2024", "Kannada")
+
+
+def test_hindi_and_marathi_never_flag_each_other():
+    """They share one Unicode block, so neither is "foreign" to the
+    other — the exclusion in uses_expected_script is by range VALUE, not
+    by which language name happens to own it."""
+    devanagari = "कृतज्ञता"
+    assert languages.uses_expected_script(devanagari, "Hindi")
+    assert languages.uses_expected_script(devanagari, "Marathi")
+
+
 def test_latin_targets_are_not_checked():
     """Swedish shares the ASCII range with English, so a range check can
     prove nothing — it must not reject valid answers."""

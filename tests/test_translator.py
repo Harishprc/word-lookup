@@ -213,6 +213,22 @@ def test_gemini_retries_once_when_the_reply_is_in_the_wrong_script():
     assert "Kannada script" in retry_prompt
 
 
+def test_gemini_retries_a_mixed_script_reply_too():
+    """The other real failure, from flash-lite against the live API:
+    "कृतज्ञತೆ" for Kannada — four Devanagari characters and one real
+    Kannada one. Not zero correct characters like the other test, so this
+    exercises the "no foreign characters" half of the check separately
+    from the "has own characters" half."""
+    replies = [
+        _response(200, _gemini_payload(_kannada_json("कृतज्ञತೆ"))),  # mixed
+        _response(200, _gemini_payload(_kannada_json("ಕೃತಜ್ಞತೆ"))),  # pure Kannada
+    ]
+    with patch("kannada_lookup.translator.requests.post", side_effect=replies) as post:
+        result = GeminiProvider("k", "m", "Kannada").lookup("gratitude")
+    assert result.translation == "ಕೃತಜ್ಞತೆ"
+    assert post.call_count == 2
+
+
 def test_gemini_does_not_retry_when_the_script_is_already_correct():
     """The retry costs an extra API call, so it must only fire on failure."""
     with patch(
@@ -223,14 +239,233 @@ def test_gemini_does_not_retry_when_the_script_is_already_correct():
     assert post.call_count == 1
 
 
-def test_gemini_raises_when_the_script_is_wrong_twice():
+def test_retry_keeps_english_fields_when_the_model_returns_a_sparse_reply():
+    """The real bug: asked to "reply again in Kannada script", the model
+    treats the translation as the whole task and returns a stripped
+    object. Observed live for "configuration" — the retry dropped
+    example_native, and the empty value got cached, so the card showed no
+    native example sentence."""
+    first = _response(200, _gemini_payload(
+        '{"translation": "दमन", "meaning": "the act of holding back", '
+        '"synonyms": "repression, restraint", '
+        '"example_en": "The suppression of dissent.", '
+        '"part_of_speech": "noun", '
+        '"example_native": "दमन का उदाहरण।"}'
+    ))
+    # Retry: right script, but everything else stripped out.
+    sparse_retry = _response(200, _gemini_payload('{"translation": "ದಮನ"}'))
+
+    with patch(
+        "kannada_lookup.translator.requests.post", side_effect=[first, sparse_retry]
+    ):
+        result = GeminiProvider("k", "m", "Kannada").lookup("suppression")
+
+    assert result.translation == "ದಮನ"          # corrected script kept
+    assert result.meaning == "the act of holding back"   # English recovered
+    assert result.synonyms == "repression, restraint"
+    assert result.example_en == "The suppression of dissent."
+    assert result.part_of_speech == "noun"
+
+
+def test_retry_never_carries_over_the_rejected_native_fields():
+    """The earlier reply was rejected for being in the wrong script, so
+    its native-language fields are precisely the ones that must NOT be
+    reused — otherwise the fix would reintroduce the Devanagari it just
+    rejected."""
+    first = _response(200, _gemini_payload(
+        '{"translation": "दमन", "example_native": "दमन का उदाहरण।", '
+        '"synonyms_native": "दमनकारी", "meaning": "holding back"}'
+    ))
+    sparse_retry = _response(200, _gemini_payload('{"translation": "ದಮನ"}'))
+
+    with patch(
+        "kannada_lookup.translator.requests.post", side_effect=[first, sparse_retry]
+    ):
+        result = GeminiProvider("k", "m", "Kannada").lookup("suppression")
+
+    assert result.meaning == "holding back"     # English carried over
+    assert result.example_native == ""          # wrong-script value dropped
+    assert result.synonyms_native == ""
+
+
+def test_retry_prompt_demands_the_complete_object():
+    """Prompt wording is the first line of defence; the backfill is the
+    backstop. Pin both."""
+    bad = _response(200, _gemini_payload(_kannada_json("दमन")))
+    good = _response(200, _gemini_payload(_kannada_json("ದಮನ")))
+    with patch(
+        "kannada_lookup.translator.requests.post", side_effect=[bad, good]
+    ) as post:
+        GeminiProvider("k", "m", "Kannada").lookup("suppression")
+    retry_prompt = post.call_args_list[1].kwargs["json"]["contents"][0]["parts"][0]["text"]
+    assert "COMPLETE JSON" in retry_prompt
+    assert "example_native" in retry_prompt.split("wrong alphabet")[1]
+
+
+def test_gemini_escalates_to_the_fallback_model_after_two_fast_failures(monkeypatch):
+    """Speed-first, reliable-second: the fast model gets two attempts, and
+    only then does the slower fallback run. Pins that the third request
+    actually targets the fallback model, not just that a third call
+    happened."""
+    monkeypatch.setattr("kannada_lookup.config.GEMINI_FALLBACK_MODEL", "strong-model")
+    replies = [
+        _response(200, _gemini_payload(_kannada_json("दमन"))),      # fast, wrong
+        _response(200, _gemini_payload(_kannada_json("কৃতজ্ঞতা"))),   # fast retry, wrong
+        _response(200, _gemini_payload(_kannada_json("ದಮನ"))),      # fallback, right
+    ]
+    with patch("kannada_lookup.translator.requests.post", side_effect=replies) as post:
+        result = GeminiProvider("k", "fast-model", "Kannada").lookup("suppression")
+
+    assert result.translation == "ದಮನ"
+    assert post.call_count == 3
+    urls = [c.args[0] if c.args else c.kwargs.get("url", "") for c in post.call_args_list]
+    assert "fast-model" in urls[0] and "fast-model" in urls[1]
+    assert "strong-model" in urls[2]
+
+
+def test_malformed_reply_is_retried_once():
+    """A garbled reply is as transient as a 5xx — the model produced
+    non-JSON that once. Observed "ephemeral" fail this way mid-run on an
+    otherwise-healthy set of lookups."""
+    replies = [
+        _response(200, _gemini_payload("not json at all")),
+        _response(200, _gemini_payload(_kannada_json("ದಮನ"))),
+    ]
+    with patch("kannada_lookup.translator.requests.post", side_effect=replies) as post:
+        result = GeminiProvider("k", "m", "Kannada").lookup("suppression")
+    assert result.translation == "ದಮನ"
+    assert post.call_count == 2
+
+
+def test_malformed_reply_retry_does_not_recurse():
+    """Persistently garbled output must surface, not loop."""
+    bad = _response(200, _gemini_payload("not json at all"))
+    with patch("kannada_lookup.translator.requests.post", side_effect=[bad, bad]) as post:
+        with pytest.raises(LookupFailed, match="model reply"):
+            GeminiProvider("k", "m", "Kannada").lookup("suppression")
+    assert post.call_count == 2
+
+
+def test_transient_5xx_is_retried_once():
+    """Google returning 503 means its side is briefly overloaded, not that
+    the request is wrong — observed a 503 sink an otherwise-good fallback
+    escalation. One immediate retry usually lands."""
+    replies = [
+        _response(503),
+        _response(200, _gemini_payload(_kannada_json("ದಮನ"))),
+    ]
+    with patch("kannada_lookup.translator.requests.post", side_effect=replies) as post:
+        result = GeminiProvider("k", "m", "Kannada").lookup("suppression")
+    assert result.translation == "ದಮನ"
+    assert post.call_count == 2
+
+
+def test_transient_5xx_retry_does_not_recurse():
+    """Two 5xx in a row must surface an error, not retry forever."""
+    with patch(
+        "kannada_lookup.translator.requests.post",
+        side_effect=[_response(503), _response(503)],
+    ) as post:
+        with pytest.raises(LookupFailed, match="temporarily unavailable"):
+            GeminiProvider("k", "m", "Kannada").lookup("suppression")
+    assert post.call_count == 2
+
+
+def test_fallback_call_gets_a_longer_timeout(monkeypatch):
+    """The escalation model is slower by definition — holding it to the
+    fast model's ceiling timed out the very call meant to rescue the
+    lookup (observed against the live API on "gratitude")."""
+    monkeypatch.setattr("kannada_lookup.config.GEMINI_FALLBACK_MODEL", "strong-model")
+    monkeypatch.setattr("kannada_lookup.config.API_TIMEOUT_S", 10.0)
+    monkeypatch.setattr("kannada_lookup.config.API_TIMEOUT_FALLBACK_S", 25.0)
+    replies = [
+        _response(200, _gemini_payload(_kannada_json("दमन"))),
+        _response(200, _gemini_payload(_kannada_json("दमन"))),
+        _response(200, _gemini_payload(_kannada_json("ದಮನ"))),
+    ]
+    with patch("kannada_lookup.translator.requests.post", side_effect=replies) as post:
+        GeminiProvider("k", "fast-model", "Kannada").lookup("suppression")
+
+    timeouts = [c.kwargs["timeout"] for c in post.call_args_list]
+    assert timeouts[0] == 10.0 and timeouts[1] == 10.0  # fast path unchanged
+    assert timeouts[2] == 25.0  # only the escalation gets the headroom
+
+
+def test_gemini_does_not_escalate_when_the_fast_model_succeeds(monkeypatch):
+    """The escalation must never cost latency on the common path."""
+    monkeypatch.setattr("kannada_lookup.config.GEMINI_FALLBACK_MODEL", "strong-model")
+    with patch(
+        "kannada_lookup.translator.requests.post",
+        return_value=_response(200, _gemini_payload(_kannada_json("ದಮನ"))),
+    ) as post:
+        GeminiProvider("k", "fast-model", "Kannada").lookup("suppression")
+    assert post.call_count == 1
+
+
+def test_gemini_skips_escalation_when_fallback_is_the_same_model(monkeypatch):
+    """No point paying a third call to ask the same model a third time."""
+    monkeypatch.setattr("kannada_lookup.config.GEMINI_FALLBACK_MODEL", "fast-model")
+    bad = _response(200, _gemini_payload(_kannada_json("दमन")))
+    with patch("kannada_lookup.translator.requests.post", side_effect=[bad, bad]) as post:
+        with pytest.raises(LookupFailed, match="wrong script"):
+            GeminiProvider("k", "fast-model", "Kannada").lookup("suppression")
+    assert post.call_count == 2
+
+
+def test_gemini_escalation_disabled_by_empty_fallback(monkeypatch):
+    monkeypatch.setattr("kannada_lookup.config.GEMINI_FALLBACK_MODEL", "")
+    bad = _response(200, _gemini_payload(_kannada_json("दमन")))
+    with patch("kannada_lookup.translator.requests.post", side_effect=[bad, bad]) as post:
+        with pytest.raises(LookupFailed, match="wrong script"):
+            GeminiProvider("k", "fast-model", "Kannada").lookup("suppression")
+    assert post.call_count == 2
+
+
+def test_gemini_reports_both_problems_when_the_fallback_itself_fails(monkeypatch):
+    """A quota error on the backstop must not masquerade as the real
+    problem — the user's word still failed for a script reason, and the
+    fallback model may be one they never configured."""
+    monkeypatch.setattr("kannada_lookup.config.GEMINI_FALLBACK_MODEL", "strong-model")
+    bad = _response(200, _gemini_payload(_kannada_json("दमन")))
+    with patch(
+        "kannada_lookup.translator.requests.post",
+        side_effect=[bad, bad, _response(429)],
+    ):
+        with pytest.raises(LookupFailed) as excinfo:
+            GeminiProvider("k", "fast-model", "Kannada").lookup("suppression")
+    message = str(excinfo.value)
+    assert "wrong script" in message
+    assert "fallback model failed too" in message
+    assert "Rate limit" in message  # the underlying cause is preserved
+
+
+def test_gemini_404_names_the_model_actually_called(monkeypatch):
+    """On escalation the failing model is the fallback, not GEMINI_MODEL —
+    naming the wrong one sends the user to edit a setting that was fine."""
+    monkeypatch.setattr("kannada_lookup.config.GEMINI_FALLBACK_MODEL", "strong-model")
+    bad = _response(200, _gemini_payload(_kannada_json("दमन")))
+    with patch(
+        "kannada_lookup.translator.requests.post",
+        side_effect=[bad, bad, _response(404)],
+    ):
+        with pytest.raises(LookupFailed) as excinfo:
+            GeminiProvider("k", "fast-model", "Kannada").lookup("suppression")
+    assert "strong-model" in str(excinfo.value)
+
+
+def test_gemini_raises_when_every_attempt_is_wrong_script(monkeypatch):
     """Failing loudly keeps the bad answer out of the cache, which is keyed
     by word with no model in the key — a stored wrong-script row would be
-    served forever."""
+    served forever. Three bad replies now, not two: the fast model gets
+    two attempts and the fallback model one before this gives up."""
+    monkeypatch.setattr("kannada_lookup.config.GEMINI_FALLBACK_MODEL", "strong-model")
     bad = _response(200, _gemini_payload(_kannada_json("दमन")))
-    with patch("kannada_lookup.translator.requests.post", side_effect=[bad, bad]):
+    with patch(
+        "kannada_lookup.translator.requests.post", side_effect=[bad, bad, bad]
+    ) as post:
         with pytest.raises(LookupFailed, match="wrong script"):
-            GeminiProvider("k", "m", "Kannada").lookup("suppression")
+            GeminiProvider("k", "fast-model", "Kannada").lookup("suppression")
+    assert post.call_count == 3
 
 
 def test_gemini_latin_target_never_triggers_the_script_retry():

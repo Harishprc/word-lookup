@@ -308,7 +308,7 @@ class App:
 
     def _on_failed(self, message):
         self._busy = False
-        self.popup.show_message(message)
+        self.popup.show_message(message, is_error=True)
 
     # --- lifecycle ---------------------------------------------------------
 

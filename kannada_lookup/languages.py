@@ -10,6 +10,8 @@ Fields per entry:
   glyph — one native character for the tray icon.
 """
 
+import unicodedata
+
 LANGUAGES = [
     # Indian languages
     {"name": "Kannada",    "code": "kn", "glyph": "ಕ"},
@@ -92,14 +94,59 @@ SCRIPT_RANGES = {
 
 def uses_expected_script(text: str, language: str) -> bool:
     """True when `text` contains at least one character of `language`'s
-    script — or when that language has no checkable script (Latin targets,
-    or a name not in LANGUAGES), in which case there is nothing to reject.
+    own script AND none from any other checkable script — or when
+    `language` has no checkable script (Latin targets, or a name not in
+    LANGUAGES), in which case there is nothing to reject.
 
-    Deliberately "at least one", not "every character": real translations
-    mix in digits, punctuation, and sometimes a Latin acronym, and any of
-    those would make an all-characters rule reject valid answers.
+    "At least one", not "every character": real translations mix in
+    digits, punctuation, and sometimes a Latin acronym (never flagged —
+    Latin has no entry in SCRIPT_RANGES), and requiring every character
+    to match would reject those valid answers.
+
+    The "none from any OTHER script" half exists because flash-lite
+    returned "कृतज्ञತೆ" for the Kannada translation of "gratitude" — four
+    Devanagari characters (कृतज्ञ) followed by one real Kannada syllable
+    (ತೆ). The old at-least-one rule passed it: the string does contain a
+    Kannada character, just not enough of them. Checking foreign scripts
+    by range membership, not a fixed set of names, means Hindi and
+    Marathi (which share one Unicode block) never flag each other — the
+    exclusion is by range value, not by which language name owns it.
     """
     ranges = SCRIPT_RANGES.get(language)
     if not ranges:
         return True
-    return any(lo <= ord(c) <= hi for c in text for lo, hi in ranges)
+    own = set(ranges)
+    has_own = has_foreign = False
+    for c in text:
+        cp = ord(c)
+        if any(lo <= cp <= hi for lo, hi in own):
+            has_own = True
+        elif _is_foreign_letter(cp):
+            has_foreign = True
+    return has_own and not has_foreign
+
+
+# Latin and its extensions (Basic Latin through Latin Extended-B plus IPA).
+# Never counted as foreign: a translation may legitimately carry an English
+# acronym or loanword, and rejecting those would fail valid answers.
+_LATIN_MAX = 0x02AF
+
+
+def _is_foreign_letter(cp: int) -> bool:
+    """True for a LETTER from some script other than the target's.
+
+    Checked by Unicode letter category rather than membership in
+    SCRIPT_RANGES, because a fixed list only knows the scripts this app
+    happens to support. flash-lite returned "θಳಿಗೆದು" for the Kannada
+    translation of "fragile" — a Greek theta spliced into Kannada text.
+    Greek isn't a target language here, so a list-based check treated
+    that character as neither own nor foreign and passed the whole
+    string. Anything the Unicode database calls a letter, that isn't
+    Latin and isn't the target script, is wrong in a translation.
+
+    Digits, punctuation, spaces and combining marks are all excluded by
+    the category test, so they never trigger a false rejection.
+    """
+    if cp <= _LATIN_MAX:
+        return False
+    return unicodedata.category(chr(cp)).startswith("L")

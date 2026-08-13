@@ -8,11 +8,14 @@ a paid Claude/GPT provider can slot in later the same way).
 
 COST NOTE (Gemini via AI Studio key):
   - Free tier, permanent, no credit card. The allowance depends on the
-    model: flash-lite class is the most generous (~1,500/day), the default
-    flash class markedly less, in both requests/day and requests/minute.
-    Either is ample for reading, since repeats are served from cache; a
-    bulk pass over the whole cache is what actually trips the per-minute
-    limit (see scripts/backfill_native_synonyms.py).
+    model: flash-lite class (the default) is the most generous
+    (~1,500/day) and, measured against the real API, 2-4x faster per
+    lookup than plain flash class — the latter isn't just cheaper on
+    quota, it's the difference between a 3s popup and one that
+    occasionally times out. Ample either way for reading, since repeats
+    are served from cache; a bulk pass over the whole cache is what
+    actually trips the per-minute limit (see
+    scripts/backfill_native_synonyms.py).
   - Caveat: Google may use free-tier prompts to improve its models —
     fine for single-word lookups, don't send anything sensitive.
 
@@ -24,7 +27,7 @@ COST NOTE (Google Cloud Translation, legacy fallback):
 import html
 import json
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import requests
 
@@ -52,6 +55,17 @@ class LookupResult:
 
 class LookupFailed(Exception):
     """User-presentable failure (network, bad key, quota…)."""
+
+
+class MalformedReply(LookupFailed):
+    """The model returned something unparseable this time.
+
+    A LookupFailed subclass so every existing `except LookupFailed`
+    handler and user-facing message path is unchanged, but distinguishable
+    internally: unlike a bad key or exhausted quota, this is transient —
+    the same request usually succeeds on an immediate second attempt — so
+    _request retries once on it, exactly like a 5xx.
+    """
 
 
 class TranslationProvider(ABC):
@@ -123,10 +137,29 @@ class GeminiProvider(TranslationProvider):
         "\n\nYour previous answer was written in the wrong alphabet. The "
         "translation MUST be written in the {language} script itself, not "
         "in the script of any other language, and not in Latin letters. "
-        "Reply again, in {language} script."
+        "Reply again with the COMPLETE JSON object — every field above, "
+        "including example_native and synonyms_native, filled in exactly "
+        "as specified. Do not return only the translation."
     )
 
     def lookup(self, text: str) -> LookupResult:
+        """Fast model first, escalate to a stronger one only if it fails.
+
+        Speed is the priority: the default model answers in ~1.5-3s and
+        gets the script right on the large majority of words, so the
+        common path is one request and nothing here fires. Reliability is
+        the backstop: on a wrong-script reply this retries the fast model
+        once (naming the mistake), and only if THAT also fails does it
+        escalate to GEMINI_FALLBACK_MODEL — measured 2-4x slower, but paid
+        for the handful of words that actually need it rather than on
+        every lookup.
+
+        The escalation is what stops a hard word being a dead end. Before
+        it, "gratitude" and "suppression" in Kannada exhausted both fast
+        attempts and surfaced an error; the strong model gets them right,
+        and CachedProvider stores the result, so each hard word costs the
+        slow path at most once ever.
+        """
         result = self._request(text)
         if languages.uses_expected_script(result.translation, self._language):
             return result
@@ -134,25 +167,76 @@ class GeminiProvider(TranslationProvider):
         # Wrong script is unambiguous and cheap to detect, and a wrong-script
         # card is useless — the reader cannot even read it. Retry once with
         # the mistake spelled out rather than caching the bad answer.
-        retried = self._request(
-            text, extra=self._RETRY_SUFFIX.format(language=self._language)
-        )
+        retry_prompt = self._RETRY_SUFFIX.format(language=self._language)
+        retried = self._request(text, extra=retry_prompt)
         if languages.uses_expected_script(retried.translation, self._language):
-            return retried
+            return self._backfill_english(retried, result)
+
+        fallback = config.GEMINI_FALLBACK_MODEL
+        if fallback and fallback != self._model:
+            try:
+                escalated = self._request(text, extra=retry_prompt, model=fallback)
+            except LookupFailed as e:
+                # The fallback is a best-effort backstop, so its own
+                # failure (quota, a retired model name) must not replace
+                # the real problem with a confusing one about a model the
+                # user may never have configured. Report both.
+                raise LookupFailed(
+                    f"Model answered in the wrong script for {self._language} "
+                    f"twice, and the fallback model failed too: {e}"
+                )
+            if languages.uses_expected_script(escalated.translation, self._language):
+                return self._backfill_english(escalated, result)
 
         # Still wrong: fail loudly instead of returning something unreadable.
         # Raising also keeps it out of the cache, which is keyed by word only
         # — a bad entry stored here would be served forever.
         raise LookupFailed(
-            f"Model answered in the wrong script for {self._language} twice. "
+            f"Model answered in the wrong script for {self._language}. "
             "Try again, or switch GEMINI_MODEL in .env."
         )
 
-    def _request(self, text: str, extra: str = "") -> LookupResult:
+    # Fields that describe the ENGLISH side of the card. Safe to carry
+    # over from a rejected attempt; the target-language fields are not.
+    _ENGLISH_FIELDS = ("part_of_speech", "meaning", "synonyms", "example_en")
+
+    @classmethod
+    def _backfill_english(cls, primary: LookupResult, earlier: LookupResult):
+        """Fill blanks in `primary` from an earlier, script-rejected reply.
+
+        Asking the model to "reply again, in <language> script" makes it
+        treat the translation as the whole task: a retry for "configuration"
+        came back with example_native empty, and that empty value was then
+        cached, which is why some cards showed no native example sentence.
+
+        The prompt now asks for the complete object, but prompt wording is
+        not a guarantee, so this backstops it in code. ONLY the English
+        fields are copied: the earlier reply was rejected for being in the
+        wrong script, so its translation, example_native and
+        synonyms_native are exactly the values that must not be reused —
+        while its meaning and English example were never in question.
+        """
+        patch = {
+            f: getattr(earlier, f)
+            for f in cls._ENGLISH_FIELDS
+            if not str(getattr(primary, f)).strip()
+            and str(getattr(earlier, f)).strip()
+        }
+        return replace(primary, **patch) if patch else primary
+
+    def _request(
+        self, text: str, extra: str = "", model: str = "", _retrying: bool = False
+    ) -> LookupResult:
+        """`model` overrides the configured one for a single call — used
+        only by lookup()'s fallback escalation, so the slower model is
+        paid for exactly the words that need it.
+
+        `_retrying` is internal: set on the one automatic retry after a
+        transient 5xx, so that path can't recurse."""
         prompt = self._PROMPT.format(text=text, language=self._language) + extra
         try:
             resp = requests.post(
-                self.ENDPOINT.format(model=self._model),
+                self.ENDPOINT.format(model=model or self._model),
                 headers={"x-goog-api-key": self._key},
                 json={
                     "contents": [
@@ -165,7 +249,12 @@ class GeminiProvider(TranslationProvider):
                     # (fences still stripped below, belt and suspenders).
                     "generationConfig": {"responseMimeType": "application/json"},
                 },
-                timeout=config.API_TIMEOUT_S,
+                # A fallback call is the slow model by definition; holding
+                # it to the fast model's ceiling would time out the very
+                # attempt meant to rescue the lookup.
+                timeout=(
+                    config.API_TIMEOUT_FALLBACK_S if model else config.API_TIMEOUT_S
+                ),
             )
         except requests.exceptions.Timeout:
             raise LookupFailed("Lookup timed out — check your connection.")
@@ -185,19 +274,44 @@ class GeminiProvider(TranslationProvider):
                 "Rate limit or daily quota hit. Wait a minute and try again."
             )
         if resp.status_code == 404:
+            # Names the model actually called, not self._model — on a
+            # fallback escalation those differ, and reporting the wrong
+            # one sends the user to edit a setting that was never at fault.
             raise LookupFailed(
-                f"Model '{self._model}' not found — set GEMINI_MODEL in .env "
-                "(e.g. gemini-2.0-flash)."
+                f"Model '{model or self._model}' not found — set GEMINI_MODEL "
+                "in .env (e.g. gemini-2.0-flash)."
+            )
+        if resp.status_code in (500, 502, 503, 504):
+            # Google's side is transiently overloaded — nothing about the
+            # request is wrong, so one immediate retry usually lands.
+            # Observed a 503 sink an otherwise-good fallback escalation.
+            # Guarded by `not _retrying` so this can never recurse further
+            # than a single extra attempt.
+            if not _retrying:
+                return self._request(text, extra, model, _retrying=True)
+            raise LookupFailed(
+                f"Gemini is temporarily unavailable ({resp.status_code}). "
+                "Try again in a moment."
             )
         if not resp.ok:
             raise LookupFailed(f"Gemini API error {resp.status_code}.")
 
+        # A garbled reply is as transient as a 5xx — the model simply
+        # produced non-JSON that once, and asking again usually works.
+        # Observed "ephemeral" fail this way on an otherwise-healthy run.
+        # Same single-retry guard, so a persistently broken reply still
+        # surfaces rather than looping.
         try:
-            raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-        except (KeyError, IndexError, ValueError):
-            raise LookupFailed("Unexpected API response format.")
+            try:
+                raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+            except (KeyError, IndexError, ValueError):
+                raise MalformedReply("Unexpected API response format.")
+            data = self._parse_json(raw)
+        except MalformedReply:
+            if not _retrying:
+                return self._request(text, extra, model, _retrying=True)
+            raise
 
-        data = self._parse_json(raw)
         translation = str(data.get("translation", "")).strip()
         if not translation:
             raise LookupFailed("No translation returned — try again.")
@@ -244,9 +358,9 @@ class GeminiProvider(TranslationProvider):
         try:
             parsed = json.loads(cleaned)
         except json.JSONDecodeError:
-            raise LookupFailed("Could not read model reply — try again.")
+            raise MalformedReply("Could not read model reply — try again.")
         if not isinstance(parsed, dict):
-            raise LookupFailed("Could not read model reply — try again.")
+            raise MalformedReply("Could not read model reply — try again.")
         return parsed
 
 
@@ -288,7 +402,7 @@ class GoogleTranslateProvider(TranslationProvider):
         try:
             translated = resp.json()["data"]["translations"][0]["translatedText"]
         except (KeyError, IndexError, ValueError):
-            raise LookupFailed("Unexpected API response format.")
+            raise MalformedReply("Unexpected API response format.")
 
         # v2 API HTML-escapes some entities even with format=text.
         return LookupResult(original=text, translation=html.unescape(translated))

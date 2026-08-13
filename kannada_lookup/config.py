@@ -121,12 +121,27 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 # model, so it won't go stale the way a pinned version number eventually
 # does. Override in .env if Google ever retires this alias too.
 #
-# flash, not flash-lite: flash-lite is cheaper and has a higher daily
-# quota, but it invents plausible-looking words in low-resource scripts —
-# "restricted" came back as "ಮಿಚ್ಛಿತ / ನಿಯನ್ಶ್ರಿತ" in Kannada, neither a real
-# word. Set GEMINI_MODEL=gemini-flash-lite-latest to trade that accuracy
-# back for quota if you look up hundreds of words a day.
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest").strip()
+# flash-lite: measured 1.4-3.1s per lookup against the real API, vs
+# 4.4-10.6s+ for plain "flash" (one call outright hit the 10s timeout).
+# flash-lite also invents wrong-script words more often — "restricted"
+# once came back "ಮಿಚ್ಛಿತ / ನಿಯನ್ಶ್ರಿತ" in Kannada, neither a real word, and
+# "gratitude" came back "कृतज्ञತೆ", four Devanagari characters and one
+# real Kannada one. That failure mode is now caught: translator.py
+# validates every reply against languages.uses_expected_script() and
+# retries once on a miss, so accuracy is enforced structurally instead of
+# by picking the slower model and hoping. Set
+# GEMINI_MODEL=gemini-flash-latest only if you'd rather trade the 2-3x
+# latency for a model that needs the retry path less often.
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest").strip()
+
+# Escalation model, used ONLY when the fast model above answers in the
+# wrong script twice in a row. Slower (measured 2-4x), but it runs for the
+# handful of words the fast model can't get right rather than on every
+# lookup — and the result is cached, so a hard word costs the slow path at
+# most once ever. Set to "" to disable escalation and fail fast instead.
+GEMINI_FALLBACK_MODEL = os.getenv(
+    "GEMINI_FALLBACK_MODEL", "gemini-flash-latest"
+).strip()
 
 # Legacy: Google Cloud Translation API key (GCP console, billing required).
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "").strip()
@@ -148,7 +163,16 @@ MAX_CHARS = int(os.getenv("MAX_CHARS", "500"))
 
 POPUP_TIMEOUT_MS = int(os.getenv("POPUP_TIMEOUT_MS", "6000"))   # auto-dismiss
 # Ceiling, not a delay — LLM calls need more headroom than translate v2 did.
+# Sized for the fast model (measured 1.4-3.1s), so a stall is caught early
+# instead of leaving the popup hanging.
 API_TIMEOUT_S = float(os.getenv("API_TIMEOUT_S", "10"))
+
+# The escalation model is measured 2-4x slower (4.4s to over 10s), so
+# holding it to the fast model's ceiling guarantees the timeouts the
+# fallback exists to prevent — observed exactly that: an escalation for
+# "gratitude" died at 10s having done nothing wrong except be slow. Only
+# applies to the rare fallback call, never the common path.
+API_TIMEOUT_FALLBACK_S = float(os.getenv("API_TIMEOUT_FALLBACK_S", "25"))
 
 # --- Shortcuts ----------------------------------------------------------
 # Stored in settings.json in Qt portable form ("Ctrl+Alt+G") because the

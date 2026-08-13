@@ -81,9 +81,9 @@ No manual `.env` editing needed — the first-run dialog above handles the API k
 
 **Getting the API key (free, ~1 minute):** [aistudio.google.com](https://aistudio.google.com) → sign in → **Get API key** → **Create API key**. No credit card, no cloud console.
 
-**Cost:** free, permanently, no card required. The default model is `gemini-flash-latest`; its free daily allowance runs to the hundreds of lookups, which is far more than normal reading generates — and repeat words are served from the local cache without touching the API at all.
+**Cost:** free, permanently, no card required, roughly 1,500 lookups/day on the default model. Repeat words are served from the local cache without touching the API at all.
 
-The cheaper `gemini-flash-lite-latest` has a higher cap (~1,500/day) but **invents plausible-looking words in low-resource scripts** — asking it for "restricted" in Kannada returned `ಮಿಚ್ಛಿತ / ನಿಯನ್ಶ್ರಿತ`, neither of which is a real word, the second being a malformed cluster that renders with a dotted circle. Set `GEMINI_MODEL=gemini-flash-lite-latest` in `.env` only if you need the quota more than the accuracy.
+**Speed:** the default is `gemini-flash-lite-latest` — measured 1.4-3.1s per lookup against the real API. The plain `gemini-flash-latest` model measured 2-4x slower (4.4s to over 10s, occasionally timing out outright) for no accuracy benefit worth that cost: flash-lite does invent wrong-script answers more often on its own — "restricted" once came back `ಮಿಚ್ಛಿತ / ನಿಯನ್ಶ್ರಿತ` in Kannada, neither a real word, and "gratitude" came back `कृतज्ञತೆ`, four Devanagari characters and one real Kannada one — but every reply is now checked against the target script and retried once on a miss (see `languages.uses_expected_script`), so the accuracy problem is handled structurally instead of by eating the slower model's latency on every single lookup. Set `GEMINI_MODEL=gemini-flash-latest` in `.env` only if you'd rather make that trade the other way.
 
 Caveat: Google may use free-tier prompts to improve its models — fine for word lookups, don't select passwords. If Google ever rotates model names (a "model not found" popup), set `GEMINI_MODEL=gemini-2.5-flash` in `.env`.
 
