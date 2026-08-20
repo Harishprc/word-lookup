@@ -1,7 +1,7 @@
-"""macOS backend — EXPERIMENTAL, written to documented APIs, never run on
+"""macOS backend - EXPERIMENTAL, written to documented APIs, never run on
 real hardware (author has no Mac). Expect to debug before trusting.
 
-Clipboard: pbpaste/pbcopy subprocesses — universally available, no pyobjc
+Clipboard: pbpaste/pbcopy subprocesses - universally available, no pyobjc
 dependency. Change detection is content-compare (NSPasteboard.changeCount
 would be exact but needs pyobjc; content-compare is good enough because
 grab_selection snapshots first and only waits for *difference*).
@@ -39,7 +39,7 @@ def read_text():
 
 
 def write_text(text):
-    # None means the original clipboard content couldn't be read — leave
+    # None means the original clipboard content couldn't be read - leave
     # the clipboard alone rather than overwriting it with an empty string.
     if text is None:
         return
@@ -50,7 +50,7 @@ def write_text(text):
 
 
 def change_token():
-    # Content IS the token — capture.py only compares tokens for equality.
+    # Content IS the token - capture.py only compares tokens for equality.
     return read_text()
 
 
@@ -60,12 +60,12 @@ def send_copy(release_vks=()):
     # Keyboard-triggered lookups leave the chord's own keys held; release
     # them so Cmd+C isn't polluted. See win.send_copy for the rationale.
     #
-    # `vk` is a Windows virtual-key code (hotkeys.Combo.vk) — it does NOT
+    # `vk` is a Windows virtual-key code (hotkeys.Combo.vk) - it does NOT
     # map to a macOS keycode, so KeyCode.from_vk(vk) targets the wrong key
     # here. For letters/digits the Windows VK happens to equal the ASCII
     # code, so KeyCode.from_char() releases the right key regardless of
     # platform (pynput resolves the native keycode itself). Anything else
-    # (named/punctuation keys) has no reliable translation available —
+    # (named/punctuation keys) has no reliable translation available -
     # best-effort fall back to from_vk, same as before.
     for vk in release_vks:
         try:
@@ -87,7 +87,7 @@ def make_listener(on_down, enabled):
     0=left 1=right 2=middle 3=Back(XButton1) 4=Forward(XButton2).
 
     Quartz comes from pyobjc-framework-Quartz, which pynput already
-    requires on macOS — no extra dependency.
+    requires on macOS - no extra dependency.
     """
     import Quartz
     from pynput import mouse
@@ -105,7 +105,7 @@ def make_listener(on_down, enabled):
             return event
         if event_type == Quartz.kCGEventOtherMouseDown:
             on_down()
-        return None  # swallow down+up — app never sees Forward
+        return None  # swallow down+up - app never sees Forward
 
     return mouse.Listener(darwin_intercept=_intercept)
 
@@ -113,7 +113,7 @@ def make_listener(on_down, enabled):
 def make_key_listener(bindings):
     """Keyboard equivalent of make_listener: swallow the chord via
     darwin_intercept so the focused app never sees it. `bindings` is a
-    list of (combo, on_trigger, enabled) triples — one shared event tap
+    list of (combo, on_trigger, enabled) triples - one shared event tap
     serves every bound shortcut instead of installing one per shortcut.
 
     pynput's macOS keyboard listener exposes the same intercept hook as
@@ -138,7 +138,7 @@ def make_key_listener(bindings):
             return event
         # macOS virtual key codes differ from Windows ones; combo.vk is a
         # Windows VK. Compare on the mapped mac keycode instead. UNTESTED
-        # — no Mac to verify on.
+        # - no Mac to verify on.
         keycode = Quartz.CGEventGetIntegerValueField(
             event, Quartz.kCGKeyboardEventKeycode
         )
@@ -154,13 +154,13 @@ def make_key_listener(bindings):
                     swallowed[id(combo)] = True
                     on_trigger()
                 return None
-            # Match on our own bookkeeping, not on modifier state — by the
+            # Match on our own bookkeeping, not on modifier state - by the
             # time the key comes up the user has often already let go of
             # Ctrl/Alt. Fall through to the next binding rather than
             # returning: two shortcuts can share a mac keycode with
             # different modifiers (Ctrl+G and Ctrl+Alt+G are both 0x05), and
             # returning here would skip the binding that actually swallowed
-            # the key-down — leaving its `swallowed` flag stuck True, so it
+            # the key-down - leaving its `swallowed` flag stuck True, so it
             # never fires again. Same shape as win.py's WM_KEYUP branch.
             if swallowed.get(id(combo)):
                 swallowed[id(combo)] = False

@@ -1,4 +1,4 @@
-"""Unit tests for sync.py — HTTP mocked, no token/network needed. The
+"""Unit tests for sync.py - HTTP mocked, no token/network needed. The
 merge tests pin the algebraic properties the design depends on
 (commutative, idempotent, associative), so any future client written
 against this wire format can be checked against the same rule."""

@@ -1,11 +1,11 @@
 """Share the lookup cache between machines via one private GitHub Gist.
 
 The dataset (every lookup ever made) is single-user, append-only, and
-keyed by (language, key) with deterministic values — a shared JSON blob
+keyed by (language, key) with deterministic values - a shared JSON blob
 with merge-on-pull, not a database and not realtime sync.
 
 Auth is a GitHub personal access token with only the "gist" scope
-(config.GITHUB_PAT) — no OAuth, no expiring refresh tokens. Unset =
+(config.GITHUB_PAT) - no OAuth, no expiring refresh tokens. Unset =
 `sync_now` becomes a no-op; nothing else about the app changes, which is
 the default state: sync is opt-in and off until a token is set.
 
@@ -29,7 +29,7 @@ Field names are camelCase and timestamps are epoch **milliseconds**,
 even though the rest of this codebase is snake_case and stores epoch
 seconds. Both are deliberate: the wire format is meant to be readable by
 clients on other platforms, where those are the native conventions. The
-mismatch is contained in this module — `_to_wire` / `_from_wire` convert
+mismatch is contained in this module - `_to_wire` / `_from_wire` convert
 at the boundary, so store.py never sees it.
 """
 
@@ -47,7 +47,7 @@ _DESCRIPTION = "Word Lookup sync cache (private, auto-managed)"
 
 
 class SyncFailed(Exception):
-    """User-presentable sync failure — mirrors LookupFailed's role, but
+    """User-presentable sync failure - mirrors LookupFailed's role, but
     sync is never allowed to interrupt a lookup, so callers should log
     and swallow this rather than surface it as a popup."""
 
@@ -57,7 +57,7 @@ class SyncFailed(Exception):
 
 def _to_wire(row: dict) -> dict:
     """Store row (snake_case, epoch-seconds float) -> wire entry
-    (camelCase, epoch-ms int) — mirrors `SyncEntry.fromEntity`."""
+    (camelCase, epoch-ms int) - mirrors `SyncEntry.fromEntity`."""
     return {
         "language": row["language"],
         "key": row["key"],
@@ -78,7 +78,7 @@ def _to_wire(row: dict) -> dict:
 
 
 def _from_wire(entry: dict) -> dict:
-    """Wire entry -> store row — mirrors `SyncEntry.toEntity`."""
+    """Wire entry -> store row - mirrors `SyncEntry.toEntity`."""
     return {
         "language": entry["language"],
         "key": entry["key"],
@@ -130,7 +130,7 @@ def _winner(a: dict, b: dict) -> dict:
 
 def merge_entries(local: list[dict], remote: list[dict]) -> list[dict]:
     """Union of both lists by (language, key), each key resolved by
-    `_winner`. Commutative, idempotent, associative — see
+    `_winner`. Commutative, idempotent, associative - see
     SyncMergerTest.kt's kdoc for why that's what makes independent syncs
     from both devices converge regardless of who goes first."""
     by_key: dict[tuple, dict] = {}
@@ -218,10 +218,10 @@ class GistClient:
 def sync_now(store: LookupStore | None = None, client: GistClient | None = None) -> bool:
     """One sync round-trip: pull, merge, push-if-changed, write merged
     rows back locally, remember any newly created gist ID. Returns True
-    if a sync actually ran (token present), False if skipped (no token —
+    if a sync actually ran (token present), False if skipped (no token -
     not an error, sync is opt-in).
 
-    Never raises on network/API failure — matches the "sync never blocks
+    Never raises on network/API failure - matches the "sync never blocks
     or breaks a lookup" rule from the sync design; callers (tray "Sync
     now", startup) should call this and not worry about exceptions, but
     SyncFailed is still raised for genuine misconfiguration (e.g. this

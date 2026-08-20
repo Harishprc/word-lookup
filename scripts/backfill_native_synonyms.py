@@ -33,7 +33,7 @@ from kannada_lookup.translator import GeminiProvider, LookupFailed  # noqa: E402
 # per-day: the default flash-class model allows only a handful per minute
 # on the free tier, and a first attempt at 1s spacing failed 80 of 93
 # words on 429s. ~7s keeps a bulk pass under that ceiling. Normal use is
-# nowhere near it — this only matters when sweeping the whole cache.
+# nowhere near it - this only matters when sweeping the whole cache.
 _PAUSE_S = 7.0
 
 # On a 429, wait this long before retrying the same word. Per-minute

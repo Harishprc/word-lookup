@@ -1,10 +1,10 @@
-"""Unit tests for the clipboard round-trip — no real clipboard, no OS
+"""Unit tests for the clipboard round-trip - no real clipboard, no OS
 backend. A fake backend stands in for platforms/{win,mac,linux}.py so both
 change-detection strategies can be exercised on any machine:
 
-  TOKEN_IS_CONTENT=False (Windows) — change_token() is a monotonic
+  TOKEN_IS_CONTENT=False (Windows) - change_token() is a monotonic
       sequence number that moves on ANY clipboard write.
-  TOKEN_IS_CONTENT=True  (mac/linux) — change_token() IS the content, so
+  TOKEN_IS_CONTENT=True  (mac/linux) - change_token() IS the content, so
       an unchanged token is ambiguous between "copied identical text" and
       "copied nothing". capture.grab_selection resolves that with a
       sentinel probe; the leak tests below are what keep it honest.
@@ -22,7 +22,7 @@ from kannada_lookup import capture  # noqa: E402
 
 class FakeBackend:
     """Scriptable clipboard. `copies` is what the "focused app" writes when
-    it receives the copy chord — None means nothing is selected, so the
+    it receives the copy chord - None means nothing is selected, so the
     chord is a no-op (exactly how a real app behaves)."""
 
     def __init__(self, clipboard=None, copies=None, token_is_content=False):
@@ -67,7 +67,7 @@ def _run(monkeypatch, backend):
 
 def test_no_selection_does_not_leak_clipboard_on_content_compare(monkeypatch, fast_poll):
     """THE regression test: on mac/linux, triggering a lookup with nothing
-    selected must return None — NOT the user's pre-existing clipboard.
+    selected must return None - NOT the user's pre-existing clipboard.
     Returning it would ship whatever was copied last (a password, a private
     note) to the translation API and into the local cache."""
     backend = FakeBackend(
@@ -86,7 +86,7 @@ def test_no_selection_restores_clipboard_after_probing(monkeypatch, fast_poll):
 
 
 def test_no_selection_returns_none_on_sequence_number_platform(monkeypatch, fast_poll):
-    """Windows has no ambiguity to resolve — same outcome, simpler path."""
+    """Windows has no ambiguity to resolve - same outcome, simpler path."""
     backend = FakeBackend(clipboard="password: hunter2", copies=None)
     assert _run(monkeypatch, backend) is None
     assert backend.clipboard == "password: hunter2"
@@ -147,7 +147,7 @@ def test_secret_shaped_selection_never_leaves_the_machine(monkeypatch, fast_poll
 
 
 def test_docstring_examples_are_actually_caught():
-    """_looks_like_secret's docstring cites these — if they don't trip the
+    """_looks_like_secret's docstring cites these - if they don't trip the
     check, the docstring is lying to the next reader."""
     assert capture._looks_like_secret("sk-proj-8fQ2xM9pKz4bTn7rE1yW6h")
     assert capture._looks_like_secret("Tr0ub4dor&3xyz9!AbCd")
@@ -159,5 +159,5 @@ def test_ordinary_words_are_not_screened_as_secrets():
 
 
 def test_long_lowercase_word_is_not_a_secret():
-    """Only 1 character class — a long word must still look up fine."""
+    """Only 1 character class - a long word must still look up fine."""
     assert not capture._looks_like_secret("pneumonoultramicroscopicsilicovolcanoconiosis")

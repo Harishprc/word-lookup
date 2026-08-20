@@ -1,7 +1,7 @@
 """HTML word register: every lookup ever made, as a self-contained page.
 
 Regenerated on demand from the SQLite store (tray menu → "Open word
-register") — no server, no staleness, opens in the default browser. Meant
+register") - no server, no staleness, opens in the default browser. Meant
 for revisiting and learning words: word + part of speech, English meaning,
 English example, synonyms, translation, native example.
 """
@@ -204,7 +204,7 @@ def generate(store: LookupStore | None = None, out_path: Path | None = None) -> 
     Filename carries a timestamp (register-<epoch>.html) instead of the
     fixed `register.html` this used to be. Windows resolves a file:// URL
     for an .html path through the file-type association handler, which
-    invokes the browser as `browser.exe --single-argument <path>` — the
+    invokes the browser as `browser.exe --single-argument <path>` - the
     URL wrapper (and any ?query cache-buster on it) never reaches the
     browser at all, only the bare path. With a constant filename every
     open was therefore byte-identical from the browser's point of view,
@@ -212,7 +212,7 @@ def generate(store: LookupStore | None = None, out_path: Path | None = None) -> 
     disk actually was. A path that changes on every generate() is the
     only part of this Windows won't silently discard.
 
-    Stale copies are deleted after the new one is written (not before —
+    Stale copies are deleted after the new one is written (not before -
     deleting first would leave a moment with no valid file to open).
     """
     store = store or LookupStore()
@@ -261,7 +261,7 @@ def _unique_path() -> Path:
     Two generate() calls can land in the same millisecond, so a bare
     timestamp is not enough. Checking `exists()` instead is worse than it
     looks: _clean_stale deletes the previous file, so a name from an
-    earlier click is "free" again and could be handed out a second time —
+    earlier click is "free" again and could be handed out a second time -
     and the browser may still hold *that* name in its cache, which is the
     whole failure being designed out.
 
@@ -274,7 +274,7 @@ def _unique_path() -> Path:
 def _clean_stale(current: Path) -> None:
     """Remove earlier register-*.html files, keeping only the one just
     written. Best-effort: a locked file (still open in a browser tab from
-    a previous click) is left for next time rather than raising — a
+    a previous click) is left for next time rather than raising - a
     leftover file is harmless, an unhandled exception here would take
     down the whole "open register" action over cache hygiene."""
     for old in current.parent.glob(f"{_STEM}-*.html"):
@@ -295,13 +295,13 @@ def generate_and_open(store: LookupStore | None = None) -> Path:
     (webbrowser.open(str(path)), not a QUrl/pathlib .as_uri()). Reproduced
     live on a real machine: QDesktopServices.openUrl(QUrl.fromLocalFile(...))
     returned success but opened nothing, and feeding the IDENTICAL file://
-    string to plain os.startfile() also opened nothing — so this isn't a
+    string to plain os.startfile() also opened nothing - so this isn't a
     Qt bug, it's Windows' `file:` URL-protocol resolution being unreliable
     independent of the `.html` extension association a raw path uses.
     os.startfile() on the bare path succeeded every time in the same test.
     webbrowser.open() on Windows calls os.startfile() with whatever string
     it receives, so passing the raw path here is what avoids the broken
-    codepath — building a URI at any point in this call defeats the fix.
+    codepath - building a URI at any point in this call defeats the fix.
     """
     import webbrowser
 

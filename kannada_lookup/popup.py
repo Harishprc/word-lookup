@@ -6,21 +6,21 @@ Windows Tk often breaks these.
 
 Card layout (rows collapse when their field is empty):
     word (bold) · part of speech
-    meaning                          — plain-English meaning
-    synonyms                         — 2-3 conversational synonyms, italic
-    example (English)                — one example sentence, italic
+    meaning                          - plain-English meaning
+    synonyms                         - 2-3 conversational synonyms, italic
+    example (English)                - one example sentence, italic
     ── divider ──
-    translation (bold) · synonyms (native, in parens) — same row
-    example (native)                 — one example sentence, italic
+    translation (bold) · synonyms (native, in parens) - same row
+    example (native)                 - one example sentence, italic
 
 A small dot at the card's top-right corner shows outcome at a glance:
 green for a successful lookup, red for an error. Hidden while loading or
-for a plain status toast (language switched, shortcuts updated, …) —
+for a plain status toast (language switched, shortcuts updated, …) -
 those aren't a lookup result, so neither color would be honest.
 
 WA_ShowWithoutActivating + Tool window flags mean the popup NEVER steals
 focus. WA_TranslucentBackground is required for real rounded corners: the
-top-level window paints nothing, the inner #card frame carries the radius —
+top-level window paints nothing, the inner #card frame carries the radius -
 otherwise the corner pixels would show as opaque squares over the app below.
 """
 
@@ -109,7 +109,7 @@ QLabel#example {{
 }}
 """
 
-# Window margin around the card — room for the drop shadow to render.
+# Window margin around the card - room for the drop shadow to render.
 _SHADOW_MARGIN = 16
 
 
@@ -171,7 +171,7 @@ class LookupPopup(QWidget):
         word_row.addWidget(self._pos, alignment=Qt.AlignBottom)
         word_row.addStretch(1)
 
-        # translation + its synonyms share a row the same way — "ಶಾಶ್ವತ
+        # translation + its synonyms share a row the same way - "ಶಾಶ್ವತ
         # (ಕಾಯಂ, ಸ್ಥಿರ)" reads as one headword with its alternatives beside
         # it, rather than a second labelled row underneath.
         translation_row = QHBoxLayout()
@@ -197,14 +197,14 @@ class LookupPopup(QWidget):
 
         self.setMaximumWidth(460)
 
-        # Outcome dot: not part of card_layout — positioned by hand in the
+        # Outcome dot: not part of card_layout - positioned by hand in the
         # card's own coordinate system so it sits in a corner instead of
         # pushing card content down.
         self._status_dot = QLabel(self._card)
         self._status_dot.setFixedSize(8, 8)
         self._status_dot.raise_()  # above the layout-managed labels below it
         self._status_dot.hide()
-        # x isn't set here — the card's width changes with every lookup's
+        # x isn't set here - the card's width changes with every lookup's
         # content, so top-right has to be recomputed after each resize.
         # See _present().
 
@@ -241,7 +241,7 @@ class LookupPopup(QWidget):
         """Short status: 'no selection', errors, ON/OFF confirmation.
 
         is_error marks a genuine lookup failure (red dot). Plain status
-        toasts — language switched, shortcuts updated, already running —
+        toasts - language switched, shortcuts updated, already running -
         default to no dot: they aren't reporting a lookup outcome, so
         neither red nor green would be an honest signal.
         """
@@ -255,7 +255,7 @@ class LookupPopup(QWidget):
     def _set_texts(self, word="", pos="", meaning="", synonyms="",
                    example_en="", translation="", example="", synonyms_native=""):
         """Fill rows; empty ones collapse. Divider only separates the two
-        halves — hidden when the English half has nothing to separate."""
+        halves - hidden when the English half has nothing to separate."""
         self._word.setText(word)
         self._pos.setText(pos)
         self._meaning.setText(meaning)
@@ -264,7 +264,7 @@ class LookupPopup(QWidget):
         self._translation.setText(translation)
         self._synonyms_native.setText(synonyms_native)
         # Plain text, default leading. A 170% line-height was tried here to
-        # stop Indic conjuncts colliding between wrapped lines — but
+        # stop Indic conjuncts colliding between wrapped lines - but
         # rendering the same sentence at 100/130/140/170% showed they never
         # collided in the first place: default leading is already clear,
         # and 170% simply pushed the lines apart (a 2-line sentence grew
@@ -283,12 +283,12 @@ class LookupPopup(QWidget):
     #
     # Colour alone was not enough on two counts, both measured rather than
     # assumed. The previous #00e676 scored 1.49:1 against the card, under
-    # the 3:1 WCAG 1.4.11 asks of a non-text indicator — it was pretty and
+    # the 3:1 WCAG 1.4.11 asks of a non-text indicator - it was pretty and
     # nearly invisible. And red vs green is the commonest colour-vision
     # deficiency: the old pair sat 1.10:1 apart in luminance, so without
     # hue they were the same dot. The replacements measure 3.84:1 (green)
     # and 5.16:1 (red) against the card, but are still only 1.65:1 apart
-    # from each other — which is exactly why the shape difference carries
+    # from each other - which is exactly why the shape difference carries
     # the meaning and the colour merely reinforces it.
     _STATUS_STYLES = {
         "success": ("#0E8C4A", 4),
@@ -315,7 +315,7 @@ class LookupPopup(QWidget):
         # each lookup's content, so unlike a fixed top-left offset this
         # can't be set once in __init__.
         #
-        # Deliberately NOT self._card.width() here — reproduced directly:
+        # Deliberately NOT self._card.width() here - reproduced directly:
         # right after adjustSize() (and even after show()+processEvents(),
         # in one case) self._card.width() and self._card.sizeHint().width()
         # both still returned a stale/wrong value, while self.width() (the
@@ -333,7 +333,7 @@ class LookupPopup(QWidget):
 
     def _clamped(self, anchor: QPoint) -> QPoint:
         """Offset from cursor, kept fully on the cursor's screen. The
-        shadow margin is transparent window space — subtract it so the
+        shadow margin is transparent window space - subtract it so the
         visible card (not the invisible margin) sits 12/18px from cursor."""
         pos = anchor + QPoint(12 - _SHADOW_MARGIN, 18 - _SHADOW_MARGIN)
         screen = QGuiApplication.screenAt(anchor) or QGuiApplication.primaryScreen()

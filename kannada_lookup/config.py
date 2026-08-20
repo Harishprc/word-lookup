@@ -1,7 +1,7 @@
 """Configuration: .env for secrets, data/settings.json for user choices.
 
 .env (copy .env.example, or let the first-run dialog create it) holds the
-API key — never hardcoded, never committed. settings.json holds the
+API key - never hardcoded, never committed. settings.json holds the
 one-time setup answers (target language); its absence IS the first-run
 signal.
 """
@@ -20,10 +20,10 @@ def _app_root() -> Path:
     """Where writable user data lives.
 
     Source checkout: the project root (one level above this package), as
-    it has always been — .env and data/ sit next to the code.
+    it has always been - .env and data/ sit next to the code.
 
     Frozen .exe (PyInstaller onefile): __file__ points inside the temp
-    _MEIxxxx extraction dir, which is DELETED on exit — writing there
+    _MEIxxxx extraction dir, which is DELETED on exit - writing there
     would lose the key, language and register on every quit. So the
     frozen build writes to %LOCALAPPDATA%\\WordLookup instead.
     """
@@ -107,14 +107,14 @@ def refresh_language() -> None:
     LANGUAGE_GLYPH = entry["glyph"]
 
 # --- Provider -----------------------------------------------------------
-# "gemini" (default): Gemini API with a free Google AI Studio key —
+# "gemini" (default): Gemini API with a free Google AI Studio key -
 #   meaning + example sentence, free tier, no credit card. The exact
 #   allowance depends on GEMINI_MODEL below.
 # "google": legacy Cloud Translation v2 fallback (needs GCP billing).
 # Future paid LLM providers (Claude/GPT) slot in here the same way.
 PROVIDER = os.getenv("PROVIDER", "gemini").strip().lower()
 
-# Gemini API key — free from https://aistudio.google.com ("Get API key").
+# Gemini API key - free from https://aistudio.google.com ("Get API key").
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
 # Model behind the lookup. "-latest" alias auto-tracks Google's current
@@ -123,7 +123,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 #
 # flash-lite: measured 1.4-3.1s per lookup against the real API, vs
 # 4.4-10.6s+ for plain "flash" (one call outright hit the 10s timeout).
-# flash-lite also invents wrong-script words more often — "restricted"
+# flash-lite also invents wrong-script words more often - "restricted"
 # once came back "ಮಿಚ್ಛಿತ / ನಿಯನ್ಶ್ರಿತ" in Kannada, neither a real word, and
 # "gratitude" came back "कृतज्ञತೆ", four Devanagari characters and one
 # real Kannada one. That failure mode is now caught: translator.py
@@ -137,7 +137,7 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest").strip()
 # Escalation model, used ONLY when the fast model above answers in the
 # wrong script twice in a row. Slower (measured 2-4x), but it runs for the
 # handful of words the fast model can't get right rather than on every
-# lookup — and the result is cached, so a hard word costs the slow path at
+# lookup - and the result is cached, so a hard word costs the slow path at
 # most once ever. Set to "" to disable escalation and fail fast instead.
 GEMINI_FALLBACK_MODEL = os.getenv(
     "GEMINI_FALLBACK_MODEL", "gemini-flash-latest"
@@ -147,7 +147,7 @@ GEMINI_FALLBACK_MODEL = os.getenv(
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "").strip()
 
 # --- Sync (optional) ------------------------------------------------------
-# GitHub personal access token, "gist" scope only — shares the lookup
+# GitHub personal access token, "gist" scope only - shares the lookup
 # cache between machines via one private Gist. See sync.py. Unset (the
 # default) = sync simply never runs; nothing else about the app changes.
 GITHUB_PAT = os.getenv("GITHUB_PAT", "").strip()
@@ -162,14 +162,14 @@ refresh_language()
 MAX_CHARS = int(os.getenv("MAX_CHARS", "500"))
 
 POPUP_TIMEOUT_MS = int(os.getenv("POPUP_TIMEOUT_MS", "6000"))   # auto-dismiss
-# Ceiling, not a delay — LLM calls need more headroom than translate v2 did.
+# Ceiling, not a delay - LLM calls need more headroom than translate v2 did.
 # Sized for the fast model (measured 1.4-3.1s), so a stall is caught early
 # instead of leaving the popup hanging.
 API_TIMEOUT_S = float(os.getenv("API_TIMEOUT_S", "10"))
 
 # The escalation model is measured 2-4x slower (4.4s to over 10s), so
 # holding it to the fast model's ceiling guarantees the timeouts the
-# fallback exists to prevent — observed exactly that: an escalation for
+# fallback exists to prevent - observed exactly that: an escalation for
 # "gratitude" died at 10s having done nothing wrong except be slow. Only
 # applies to the rare fallback call, never the common path.
 API_TIMEOUT_FALLBACK_S = float(os.getenv("API_TIMEOUT_FALLBACK_S", "25"))

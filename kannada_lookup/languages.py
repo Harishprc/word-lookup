@@ -1,13 +1,13 @@
 """Curated target-language list for the first-run setup dialog.
 
 Fields per entry:
-  name  — English name; interpolated into the LLM prompt ("English-Hindi
+  name  - English name; interpolated into the LLM prompt ("English-Hindi
           dictionary", "translation in Hindi", …). The prompt is the only
-          thing the LLM needs, so any language Gemini knows would work —
+          thing the LLM needs, so any language Gemini knows would work -
           this list just keeps the dropdown tidy.
-  code  — ISO 639-1 code; used only by the legacy Google Translate
+  code  - ISO 639-1 code; used only by the legacy Google Translate
           provider (PROVIDER=google in .env).
-  glyph — one native character for the tray icon.
+  glyph - one native character for the tray icon.
 """
 
 import unicodedata
@@ -50,7 +50,7 @@ _DEFAULT = {"name": "Kannada", "code": "kn", "glyph": "ಕ"}
 
 def get(name: str) -> dict:
     """Entry for a language name; tolerant of unknown names (e.g. a hand-
-    edited settings.json) — falls back to a generic latin glyph."""
+    edited settings.json) - falls back to a generic latin glyph."""
     entry = _BY_NAME.get(name)
     if entry:
         return entry
@@ -59,13 +59,13 @@ def get(name: str) -> dict:
 
 # Unicode ranges a translation into this language must actually touch.
 #
-# Defined only where the target script differs from English's — a Latin
+# Defined only where the target script differs from English's - a Latin
 # target (Swedish, Spanish, German…) shares the ASCII range with the input
 # word, so there is nothing a range check could prove. Absent from this
 # table means "not checkable", which is treated as valid.
 #
 # This exists because models answer in the wrong script: asking for the
-# Kannada for "suppression" returned "दमन", which is Devanagari — correct
+# Kannada for "suppression" returned "दमन", which is Devanagari - correct
 # word, wrong alphabet, useless to a Kannada reader. It is cheap to detect
 # (no model call) and the wrong script is unambiguous, unlike "is this the
 # best word", which we deliberately do NOT try to judge here.
@@ -94,22 +94,22 @@ SCRIPT_RANGES = {
 
 def uses_expected_script(text: str, language: str) -> bool:
     """True when `text` contains at least one character of `language`'s
-    own script AND none from any other checkable script — or when
+    own script AND none from any other checkable script - or when
     `language` has no checkable script (Latin targets, or a name not in
     LANGUAGES), in which case there is nothing to reject.
 
     "At least one", not "every character": real translations mix in
-    digits, punctuation, and sometimes a Latin acronym (never flagged —
+    digits, punctuation, and sometimes a Latin acronym (never flagged -
     Latin has no entry in SCRIPT_RANGES), and requiring every character
     to match would reject those valid answers.
 
     The "none from any OTHER script" half exists because flash-lite
-    returned "कृतज्ञತೆ" for the Kannada translation of "gratitude" — four
+    returned "कृतज्ञತೆ" for the Kannada translation of "gratitude" - four
     Devanagari characters (कृतज्ञ) followed by one real Kannada syllable
     (ತೆ). The old at-least-one rule passed it: the string does contain a
     Kannada character, just not enough of them. Checking foreign scripts
     by range membership, not a fixed set of names, means Hindi and
-    Marathi (which share one Unicode block) never flag each other — the
+    Marathi (which share one Unicode block) never flag each other - the
     exclusion is by range value, not by which language name owns it.
     """
     ranges = SCRIPT_RANGES.get(language)
@@ -138,7 +138,7 @@ def _is_foreign_letter(cp: int) -> bool:
     Checked by Unicode letter category rather than membership in
     SCRIPT_RANGES, because a fixed list only knows the scripts this app
     happens to support. flash-lite returned "θಳಿಗೆದು" for the Kannada
-    translation of "fragile" — a Greek theta spliced into Kannada text.
+    translation of "fragile" - a Greek theta spliced into Kannada text.
     Greek isn't a target language here, so a list-based check treated
     that character as neither own nor foreign and passed the whole
     string. Anything the Unicode database calls a letter, that isn't

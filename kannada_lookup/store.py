@@ -1,4 +1,4 @@
-"""Persistent lookup cache — the offline layer and register data source.
+"""Persistent lookup cache - the offline layer and register data source.
 
 Every successful lookup is saved to a small SQLite file. Repeat lookups
 are then instant, cost zero API quota, and work with no internet. The
@@ -6,20 +6,20 @@ cache is keyed per target language, so switching languages never serves
 stale entries from another language.
 
 Schema history:
-  v1 — single-language columns (kannada, example), key TEXT PK
-  v2 — generic columns (translation, example_native, example_en,
+  v1 - single-language columns (kannada, example), key TEXT PK
+  v2 - generic columns (translation, example_native, example_en,
        part_of_speech), PK (language, key). _migrate_v1() carries v1 rows
        over as language='Kannada' so existing users keep their cache.
-  v3 — adds `updated_at` (backfilled from created_at) and `deleted`
+  v3 - adds `updated_at` (backfilled from created_at) and `deleted`
        (tombstone flag). Both exist purely for Gist sync between machines
-       (see sync.py) — a v2-only install never touches either column
+       (see sync.py) - a v2-only install never touches either column
        differently than before. _migrate_v2_add_sync_columns() ALTERs an
        existing table in place rather than copy-and-drop, since SQLite's
        ADD COLUMN is enough here and there's no column removal or type
        change to reconcile.
 
 Thread-safety: lookups run on short-lived worker threads (one at a time,
-guarded by App._busy), but sqlite3 connections are cheap — we open one
+guarded by App._busy), but sqlite3 connections are cheap - we open one
 per call rather than sharing a connection across threads.
 """
 
@@ -30,7 +30,7 @@ from pathlib import Path
 from .config import PROJECT_ROOT
 from .translator import LookupResult
 
-# data/ lives under the app root — the project root in a source checkout
+# data/ lives under the app root - the project root in a source checkout
 # (gitignored), or %LOCALAPPDATA%\WordLookup in a frozen .exe. See
 # config._app_root().
 DB_PATH = PROJECT_ROOT / "data" / "lookups.db"
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS lookups_v2 (
 )
 """
 
-# Order must match LookupResult's field order — rows are splatted straight
+# Order must match LookupResult's field order - rows are splatted straight
 # into it positionally.
 _RESULT_COLS = (
     "original, translation, part_of_speech, meaning, synonyms, "
@@ -111,7 +111,7 @@ class LookupStore:
     def _migrate_v2_add_sync_columns(con: sqlite3.Connection) -> None:
         """Idempotent ALTER for installs created before v3: adds
         updated_at/deleted if missing, backfills updated_at from
-        created_at (best guess — the exact last-modified time was never
+        created_at (best guess - the exact last-modified time was never
         recorded pre-v3, and created_at is the closest available fact)."""
         columns = {row[1] for row in con.execute("PRAGMA table_info(lookups_v2)")}
         if "updated_at" not in columns:
@@ -124,7 +124,7 @@ class LookupStore:
             )
         # Self-healing, not just one-time: also covers rows that reached
         # lookups_v2 via _migrate_v1 (a v1-only install jumping straight
-        # to v3) — that INSERT doesn't set updated_at, so it lands at the
+        # to v3) - that INSERT doesn't set updated_at, so it lands at the
         # column default (0) even though the table always had the column.
         con.execute(
             "UPDATE lookups_v2 SET updated_at = created_at "
@@ -199,7 +199,7 @@ class LookupStore:
             )
 
     def all_entries(self) -> list[dict]:
-        """Every *live* cached lookup, newest first — feeds the HTML
+        """Every *live* cached lookup, newest first - feeds the HTML
         register. Tombstones are excluded; use `all_including_deleted`
         for the sync payload, which needs deletions represented too."""
         with self._connect() as con:
@@ -208,7 +208,7 @@ class LookupStore:
                 # rowid breaks the tie: time.time() on Windows can return
                 # the same value for two calls ~15ms apart, so two quick
                 # lookups share a created_at and ordering by it alone is
-                # arbitrary — the newer word could render below the older
+                # arbitrary - the newer word could render below the older
                 # one. rowid rises with insertion, so it means "written
                 # later" exactly when the timestamps cannot say.
                 "FROM lookups_v2 WHERE deleted = 0 "
@@ -226,7 +226,7 @@ class LookupStore:
         return entries
 
     def all_including_deleted(self) -> list[dict]:
-        """Every row, tombstones included — the sync payload's source of
+        """Every row, tombstones included - the sync payload's source of
         truth. Keys match `_SYNC_COLS` order."""
         with self._connect() as con:
             rows = con.execute(
@@ -236,7 +236,7 @@ class LookupStore:
 
     def upsert_raw(self, row: dict) -> None:
         """Writes a full row (as produced by `all_including_deleted` /
-        the sync merge) verbatim — unlike `put`, does not touch
+        the sync merge) verbatim - unlike `put`, does not touch
         created_at/updated_at, since the caller (sync.py) already decided
         those via the merge, and re-stamping "now" here would defeat the
         whole point of last-write-wins."""

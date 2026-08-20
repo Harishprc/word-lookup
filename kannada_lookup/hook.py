@@ -5,16 +5,16 @@ The shortcut exists for laptops, which have no side buttons at all. Both
 hooks share one debounce and one enabled-flag contract.
 
 All OS-specific mechanics (raw message filtering, event suppression,
-button numbering) live in kannada_lookup/platforms/ — this module only
+button numbering) live in kannada_lookup/platforms/ - this module only
 adds the shared debounce and lifecycle.
 
 Per-OS behavior (see each platforms/ module for detail):
-  Windows  — SetWindowsHookEx WH_MOUSE_LL via pynput; XButton2 swallowed
+  Windows  - SetWindowsHookEx WH_MOUSE_LL via pynput; XButton2 swallowed
              so the app underneath never sees "Forward". No admin needed
              (but a user-session hook can't observe elevated windows).
-  macOS    — Quartz event tap; swallows the click; needs Accessibility +
+  macOS    - Quartz event tap; swallows the click; needs Accessibility +
              Input Monitoring permissions. EXPERIMENTAL.
-  Linux    — X11 observe-only; the app also receives the click (X11 can't
+  Linux    - X11 observe-only; the app also receives the click (X11 can't
              consume events via pynput). EXPERIMENTAL.
 """
 
@@ -67,7 +67,7 @@ class XButtonHook(_DebouncedHook):
 
 
 class KeyComboHook:
-    """One shared OS-level keyboard hook serving every bound shortcut —
+    """One shared OS-level keyboard hook serving every bound shortcut -
     the lookup shortcut (laptop alternative to the Forward button) and the
     ON/OFF toggle both go through this, instead of one hook installation
     each. Every keystroke on the system only has to pass through a single

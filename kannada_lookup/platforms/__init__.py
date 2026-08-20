@@ -27,7 +27,7 @@ the focused app as well, so Ctrl+Alt+D in Word would insert an endnote
 alongside the lookup. Windows and macOS can swallow it; X11 cannot.
 
 Windows is the only backend tested on real hardware. macOS and Linux are
-best-effort implementations of the documented pynput/clipboard APIs —
+best-effort implementations of the documented pynput/clipboard APIs -
 EXPERIMENTAL, see README before relying on them.
 """
 

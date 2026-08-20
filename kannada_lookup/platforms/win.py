@@ -1,7 +1,7 @@
-"""Windows backend — the only one tested on real hardware.
+"""Windows backend - the only one tested on real hardware.
 
 Clipboard: pywin32. Change detection uses GetClipboardSequenceNumber, a
-global counter Windows bumps on every clipboard write — exact and cheap,
+global counter Windows bumps on every clipboard write - exact and cheap,
 no content polling needed.
 
 Hook suppression: pynput's win32_event_filter lets us see the raw
@@ -17,7 +17,7 @@ from pynput.keyboard import Controller, Key, KeyCode
 
 SUPPRESSES_CLICK = True
 SUPPRESSES_HOTKEY = True
-# change_token() is an exact sequence number here — it always moves on a
+# change_token() is an exact sequence number here - it always moves on a
 # write, content-identical or not. See mac.py/linux.py for the opposite.
 TOKEN_IS_CONTENT = False
 
@@ -48,7 +48,7 @@ def read_text():
 
 def write_text(text):
     # None means the original clipboard content couldn't be read (open
-    # failed or held nothing we understand) — leave the clipboard alone
+    # failed or held nothing we understand) - leave the clipboard alone
     # rather than emptying it out from under the user.
     if text is None:
         return
@@ -74,14 +74,14 @@ def send_copy(release_vks=()):
         _kbd.release(mod)
 
     # When the trigger was a keyboard shortcut, its own keys are still
-    # physically down — sending Ctrl+C on top of a held "G" makes the app
+    # physically down - sending Ctrl+C on top of a held "G" makes the app
     # see Ctrl+G. Release them first. Callers on the mouse path pass
     # nothing and this loop is a no-op.
     for vk in release_vks:
         try:
             _kbd.release(KeyCode.from_vk(vk))
         except Exception:
-            pass  # unmappable vk — the Ctrl+C below is still worth trying
+            pass  # unmappable vk - the Ctrl+C below is still worth trying
 
     _kbd.press(Key.ctrl)
     _kbd.press("c")
@@ -104,11 +104,11 @@ def make_listener(on_down, enabled):
 
     def _filter(msg, data):
         if msg not in (WM_XBUTTONDOWN, WM_XBUTTONUP):
-            return True  # not a side button — let it through
+            return True  # not a side button - let it through
         if (data.mouseData >> 16) != 2:
             return True  # XButton1 (Back) stays untouched
         if not enabled.is_set():
-            return True  # tool OFF — Forward works normally
+            return True  # tool OFF - Forward works normally
         if msg == WM_XBUTTONDOWN:
             # Callback BEFORE suppress_event: suppress_event raises
             # internally to abort processing of this event, so no code
@@ -124,17 +124,17 @@ def make_key_listener(bindings):
     """pynput keyboard.Listener that fires on_trigger() for whichever combo
     in `bindings` (a list of (combo, on_trigger, enabled) triples) is
     pressed, swallowing the chord so the focused app never sees it. One
-    listener — one low-level hook — serves every bound shortcut, instead
+    listener - one low-level hook - serves every bound shortcut, instead
     of installing a separate hook per shortcut.
 
     Suppression is the whole point. Without it the shortcut would reach
-    whatever has focus — press Ctrl+Alt+D in Word and you would get a
+    whatever has focus - press Ctrl+Alt+D in Word and you would get a
     lookup AND an inserted endnote. This mirrors make_listener() above,
     which already swallows the Forward button the same way.
 
     Raw Windows message constants (winuser.h):
       WM_KEYDOWN 0x0100, WM_KEYUP 0x0101
-      WM_SYSKEYDOWN 0x0104, WM_SYSKEYUP 0x0105  — any chord holding Alt
+      WM_SYSKEYDOWN 0x0104, WM_SYSKEYUP 0x0105  - any chord holding Alt
       arrives as the SYS variants, so both pairs must be handled.
     """
     from pynput import keyboard
@@ -165,11 +165,11 @@ def make_key_listener(bindings):
     def _filter(msg, data):
         for combo, on_trigger, enabled in bindings:
             if data.vkCode != combo.vk:
-                continue  # different key entirely — not this binding
+                continue  # different key entirely - not this binding
 
             if msg in (WM_KEYDOWN, WM_SYSKEYDOWN):
                 if not enabled.is_set() or not _modifiers_match(combo):
-                    continue  # tool OFF, or wrong modifiers — not this one
+                    continue  # tool OFF, or wrong modifiers - not this one
                 if not swallowed.get(id(combo)):
                     # Guard against key-repeat: holding the chord must not
                     # queue a lookup per repeat. Callback BEFORE
@@ -181,7 +181,7 @@ def make_key_listener(bindings):
                 return True
 
             elif msg in (WM_KEYUP, WM_SYSKEYUP):
-                # Match on our own bookkeeping, not on modifier state — by
+                # Match on our own bookkeeping, not on modifier state - by
                 # the time the key comes up the user has often already let
                 # go of Ctrl/Alt, so _modifiers_match() would be False here.
                 if swallowed.get(id(combo)):

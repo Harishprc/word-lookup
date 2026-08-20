@@ -1,11 +1,11 @@
-"""Linux backend — EXPERIMENTAL, written to documented APIs, never run on
+"""Linux backend - EXPERIMENTAL, written to documented APIs, never run on
 real hardware. Expect to debug before trusting.
 
-Clipboard: xclip on X11, wl-paste/wl-copy on Wayland — whichever exists.
+Clipboard: xclip on X11, wl-paste/wl-copy on Wayland - whichever exists.
 Install one:  sudo apt install xclip   (or wl-clipboard on Wayland).
 Change detection is content-compare, same rationale as macOS.
 
-Hook suppression: NOT POSSIBLE with pynput on X11 — the X11 backend can
+Hook suppression: NOT POSSIBLE with pynput on X11 - the X11 backend can
 observe events but cannot consume them, so the Forward click ALSO reaches
 the app under the cursor (browser may navigate forward on lookup). This
 is a documented platform limitation, not a bug here. SUPPRESSES_CLICK is
@@ -51,7 +51,7 @@ def read_text():
 
 
 def write_text(text):
-    # None means the original clipboard content couldn't be read — leave
+    # None means the original clipboard content couldn't be read - leave
     # the clipboard alone rather than overwriting it with an empty string.
     if text is None:
         return
@@ -79,7 +79,7 @@ def send_copy(release_vks=()):
     # digits the Windows VK happens to equal the ASCII code, so
     # KeyCode.from_char() releases the right key regardless of platform
     # (pynput resolves the native keysym itself). Anything else (named/
-    # punctuation keys) has no reliable translation available —
+    # punctuation keys) has no reliable translation available -
     # best-effort fall back to from_vk, same as before.
     for vk in release_vks:
         try:
@@ -97,7 +97,7 @@ def send_copy(release_vks=()):
 
 def make_listener(on_down, enabled):
     """Observe-only listener: X11 delivers button 9 (Forward) presses to us
-    AND to the app under the cursor — no way to consume them with pynput.
+    AND to the app under the cursor - no way to consume them with pynput.
     """
     from pynput import mouse
 
@@ -113,11 +113,11 @@ def make_listener(on_down, enabled):
 def make_key_listener(bindings):
     """Observe-only hotkey listener, for the same reason as make_listener:
     X11 delivers the chord to us AND to the focused app. `bindings` is a
-    list of (combo, on_trigger, enabled) triples — GlobalHotKeys already
+    list of (combo, on_trigger, enabled) triples - GlobalHotKeys already
     accepts a dict of chords, so every bound shortcut shares one listener.
 
     GlobalHotKeys is the right tool here precisely because suppression is
-    off the table anyway — on Windows and macOS we use a filtering hook
+    off the table anyway - on Windows and macOS we use a filtering hook
     instead. SUPPRESSES_HOTKEY is False so the UI can warn about this.
     """
     from pynput import keyboard

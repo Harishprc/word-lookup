@@ -155,12 +155,12 @@ components:
 The Word Register is the quiet half of Word Lookup. The popup is a two-second
 glance; this is the page you open on purpose, to find a word you half-remember
 or to re-read the ten you met this week. It is a personal record, not a
-dashboard — there is no one to impress and nothing to sell, so the design's
+dashboard - there is no one to impress and nothing to sell, so the design's
 only job is to get out of the way of the text.
 
 Three adjectives drive it: **calm, legible, focused**. Calm means one accent
 colour and no decoration that isn't carrying information. Legible means the
-native-script column — Kannada, Devanagari, Tamil — is set larger and looser
+native-script column - Kannada, Devanagari, Tamil - is set larger and looser
 than the English around it, because conjunct scripts need vertical room that
 Latin does not. Focused means the search field is the only control on the
 page.
@@ -172,9 +172,9 @@ icon so the register reads as the same product as the popup.
 
 - **Primary (#14171C):** Near-black ink for headwords, meanings and
   translations. Softened off pure black so long reading sessions don't glare.
-- **Secondary (#5B6472):** Slate for metadata — language, date, part of
+- **Secondary (#5B6472):** Slate for metadata - language, date, part of
   speech. Passes AA at 5.98:1, so it recedes without becoming unreadable.
-- **Tertiary (#7150F0):** The interaction colour — search focus ring, links,
+- **Tertiary (#7150F0):** The interaction colour - search focus ring, links,
   primary buttons. This is a deliberately darkened version of the tray icon's
   **#7C5CFF**, which fails WCAG AA on white at 4.35:1; #7150F0 reaches 5.11:1
   and is indistinguishable at a glance. The original violet survives as
@@ -198,14 +198,14 @@ AA; the palette contains no pair below 4.5:1 in either theme.
 Two families, split by writing system rather than by decoration. **Inter**
 sets all Latin text; **Noto Sans Kannada** (falling back to Nirmala UI, then
 Segoe UI) sets every native-script cell. This mirrors the popup, which already
-switches families for the translation row — Segoe UI has no Indic glyphs, and
+switches families for the translation row - Segoe UI has no Indic glyphs, and
 letting the browser pick a fallback produces inconsistent conjunct rendering.
 
 - **display-lg (28px/600):** The page title only. Appears once.
 - **headline-md (18px/600):** The headword. The heaviest thing in each row,
   because scanning this column is the primary task.
 - **body-lg (19px/500, Noto Sans Kannada):** The translation. Larger than the
-  English body text on purpose — Indic conjuncts carry more detail per glyph
+  English body text on purpose - Indic conjuncts carry more detail per glyph
   and are genuinely harder to read at Latin sizes.
 - **body-md / body-sm (15px / 13.5px):** Meanings and English examples.
 - **body-native (15px, line-height 1.75):** Native example sentences. The
@@ -215,7 +215,7 @@ letting the browser pick a fallback produces inconsistent conjunct rendering.
 
 ## Layout
 
-An 8px base unit throughout. The table is fluid — `min(100%, 1680px)` — so it
+An 8px base unit throughout. The table is fluid - `min(100%, 1680px)` - so it
 fills the window instead of sitting in a fixed column that looks stranded on a
 large monitor. Reading measure is protected per-*column* rather than by
 starving the whole table of width: columns are sized in percentages, so they
@@ -224,14 +224,14 @@ because past roughly that point rows get wide enough that the eye loses its
 place moving from Meaning to Translation.
 
 (This replaces an earlier fixed `1100px`, which protected measure at the cost
-of wasting most of a wide screen — the wrong side of that trade.)
+of wasting most of a wide screen - the wrong side of that trade.)
 
 The table is the whole page. Cells use asymmetric padding (`16px` horizontal,
 `14px` vertical) because rows are visually separated by rules rather than
 gaps, and the extra horizontal room is what keeps adjacent columns from
 reading as one block. Columns are ordered by scanning frequency: headword,
 meaning, English example, synonyms, translation, native example, then language
-and date last — the two you almost never search by.
+and date last - the two you almost never search by.
 
 The search field is sticky at the top. Filtering happens live on every
 keystroke, over every column, so there is no submit button and no result
@@ -242,30 +242,30 @@ count to interpret.
 Depth is carried by a single soft shadow and nothing else. The table gets one
 `0 4px 24px rgba(0,0,0,.06)` shadow to lift it off the page; rows are divided
 by 1px `outline` rules, never by shadows or alternating fills. Zebra striping
-is deliberately absent — with a native-script column already drawing the eye,
+is deliberately absent - with a native-script column already drawing the eye,
 a second competing rhythm makes the table harder to scan, not easier.
 
 In dark mode a drop shadow does essentially nothing on a dark ground, so it is
-dropped — but the surface being lighter than the page is **not** enough to
+dropped - but the surface being lighter than the page is **not** enough to
 replace it. `#1A1D23` on `#111318` measures 1.10:1, and the header against the
 surface 1.08:1: both imperceptible. Shipped that way, the table had no visible
 edge at all, which read as a header that didn't line up and a date column
 floating outside the table.
 
 Dark mode therefore draws the table's edge with an explicit 1px `outline`
-border (1.29:1 against the surface) instead of elevation — the usual way dark
+border (1.29:1 against the surface) instead of elevation - the usual way dark
 UIs replace shadow. Light mode keeps the shadow and needs no border: page vs
 surface is only 1.06:1 there too, so the shadow is doing that work.
 
 **The general rule:** a surface boundary needs a shadow or a border. Tonal
-difference alone does not survive contact with a real screen — this section
+difference alone does not survive contact with a real screen - this section
 previously claimed it did, and it was wrong.
 
 ## Shapes
 
 Soft but not playful: `12px` on the table and cards, `8px` on inputs and
 buttons, `4px` reserved for the smallest chips. Corners are rounded enough to
-feel like the popup's card — which uses the same 12px radius — and no more.
+feel like the popup's card - which uses the same 12px radius - and no more.
 Nothing is a pill; fully-rounded shapes read as marketing, and this is a
 reference tool.
 
@@ -278,7 +278,7 @@ reference tool.
 
 **Table.** Header row in `header-surface` with `label-sm` uppercase labels,
 sticky so column meaning survives scrolling. Body rows tint to
-`tertiary-subtle` on hover — a tint, never a border change, so nothing
+`tertiary-subtle` on hover - a tint, never a border change, so nothing
 reflows under the cursor.
 
 **Headword cell.** Headword in `headline-md`, with the part of speech
@@ -287,15 +287,15 @@ immediately after it in `metadata` style, italic. This mirrors the popup's
 
 **Translation cell.** Translation in `body-lg`, native synonyms directly
 beneath in `metadata` at native size. The native example sentence lives in its
-own column, not stacked here — long sentences stretched this cell wide enough
+own column, not stacked here - long sentences stretched this cell wide enough
 to bury the translation itself.
 
-**Buttons.** Primary is solid `tertiary` with white text at 36px tall — small,
+**Buttons.** Primary is solid `tertiary` with white text at 36px tall - small,
 because nothing on this page is a call to action. Secondary is text-only in
 `tertiary`, gaining a `tertiary-subtle` background on hover.
 
 **Empty state.** Centred `body-md` in `secondary`, with no illustration and no
-button: "No lookups yet — select a word and press the Forward button." It
+button: "No lookups yet - select a word and press the Forward button." It
 states the action that fills the page, then stops.
 
 ## Do's and Don'ts
@@ -310,7 +310,7 @@ states the action that fills the page, then stops.
   weight on hover shifts layout and makes long lists feel unstable.
 - **Don't** add zebra striping, column dividers, or a second accent colour.
   The native column is already the visual anchor; anything else competes.
-- **Don't** introduce a second interaction colour for destructive actions —
+- **Don't** introduce a second interaction colour for destructive actions -
   use `error` for the text or icon and keep the surface neutral.
 - **Don't** truncate meanings or examples with ellipsis. This page exists to
   be read; let rows grow taller instead.

@@ -5,8 +5,8 @@ across arbitrary apps (UI Automation fails in PDF viewers and Electron
 apps). Simulating the copy shortcut works everywhere, so:
 
   1. snapshot current clipboard text
-  2. send a synthetic copy chord (Ctrl+C / Cmd+C — platform backend)
-  3. wait for the clipboard "change token" to move — on Windows that's
+  2. send a synthetic copy chord (Ctrl+C / Cmd+C - platform backend)
+  3. wait for the clipboard "change token" to move - on Windows that's
      the exact clipboard sequence number; on mac/linux it's a content
      compare (see platforms/)
   4. read the copied selection
@@ -14,7 +14,7 @@ apps). Simulating the copy shortcut works everywhere, so:
 
 Limitation (documented, accepted): snapshot/restore is text-only. If the
 clipboard held an image or file list, that content is lost by the
-round-trip — restoring every exotic clipboard format is out of scope.
+round-trip - restoring every exotic clipboard format is out of scope.
 """
 
 import time
@@ -27,7 +27,7 @@ _COPY_WAIT_S = 0.6
 _POLL_S = 0.02
 
 # Below this length a token is assumed to be a word/phrase, never a secret
-# — real passwords, API keys and tokens worth blocking are long. Kept
+# - real passwords, API keys and tokens worth blocking are long. Kept
 # short so ordinary lookups are never affected.
 _SECRET_LIKE_MIN_LEN = 20
 
@@ -41,7 +41,7 @@ _PROBE_SENTINEL = "\x00word-lookup-probe\x00"
 def _looks_like_secret(text: str) -> bool:
     """True for a single unspaced token that mixes enough character classes
     to look like a generated password/API key/token rather than a word or
-    phrase — e.g. "sk-proj-8fQ2xM9pKz4bTn7rE1yW6h", "Tr0ub4dor&3xyz9!AbCd".
+    phrase - e.g. "sk-proj-8fQ2xM9pKz4bTn7rE1yW6h", "Tr0ub4dor&3xyz9!AbCd".
     (Both examples clear _SECRET_LIKE_MIN_LEN; anything shorter is rejected
     by the length guard before the character-class test runs at all.)
     Deliberately conservative: real lookups are short and/or contain
@@ -61,7 +61,7 @@ def _looks_like_secret(text: str) -> bool:
 def grab_selection(release_vks=()):
     """Return the currently selected text, or None if nothing was selected.
 
-    Runs on a worker thread (never the GUI thread) — it sleeps while
+    Runs on a worker thread (never the GUI thread) - it sleeps while
     polling for the copy to land.
 
     `release_vks` are keys the user is still physically holding because
@@ -71,12 +71,12 @@ def grab_selection(release_vks=()):
     """
     original = backend.read_text()
 
-    # On platforms where change_token() is a content compare (mac, linux —
+    # On platforms where change_token() is a content compare (mac, linux -
     # Windows uses the exact clipboard sequence number instead), "the app
     # copied a selection identical to what was already on the clipboard"
     # and "the app copied nothing at all" are indistinguishable: the token
     # sits still either way. Prime the clipboard with a sentinel so they
-    # separate cleanly — any value other than the sentinel afterwards is
+    # separate cleanly - any value other than the sentinel afterwards is
     # proof a real copy landed.
     #
     # This must never degrade into "assume the copy worked": a trigger with
@@ -95,7 +95,7 @@ def grab_selection(release_vks=()):
 
     backend.send_copy(release_vks)
 
-    # Wait for the token to move — proof the target app actually wrote
+    # Wait for the token to move - proof the target app actually wrote
     # something. Apps with nothing selected typically ignore the copy
     # chord entirely, so the token never changes.
     deadline = time.monotonic() + _COPY_WAIT_S
@@ -123,7 +123,7 @@ def grab_selection(release_vks=()):
     text = " ".join(selection.split())  # collapse newlines from PDF line-wraps
     if _looks_like_secret(text):
         # Never send a password/API-key-shaped token to the lookup API or
-        # cache it — see _looks_like_secret.
+        # cache it - see _looks_like_secret.
         return None
     if len(text) > config.MAX_CHARS:
         # Truncate at a word boundary to cap API spend on huge selections.

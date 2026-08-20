@@ -3,7 +3,7 @@
 Threading model (the part that usually bites):
   - Qt MUST own the main thread → QApplication + popup + tray live there.
   - pynput's mouse hook and the global-hotkey listener each run their own
-    thread. They never touch Qt directly — they emit Qt signals, which Qt
+    thread. They never touch Qt directly - they emit Qt signals, which Qt
     delivers to the GUI thread via queued connections (thread-safe).
   - Each lookup (Ctrl+C round-trip + HTTP call, both blocking) runs in a
     short-lived worker thread so the popup and hook stay responsive.
@@ -131,7 +131,7 @@ class App:
                 toggle,
                 self.bridge.toggle_requested.emit,
                 self.enabled,
-                True,  # always_on — must work while the tool is OFF
+                True,  # always_on - must work while the tool is OFF
             ))
 
         if bindings:
@@ -225,7 +225,7 @@ class App:
         )
 
     def _change_shortcuts(self):
-        """Open the recorder so shortcuts can be changed after first run —
+        """Open the recorder so shortcuts can be changed after first run -
         without this, an existing install could never reach the dialog,
         since it only appears when settings.json is missing."""
         from .setup_dialog import ShortcutDialog
@@ -246,13 +246,13 @@ class App:
     # --- sync -------------------------------------------------------------
 
     def _run_sync(self):
-        """Runs sync.sync_now() on a worker thread — it's a network call,
+        """Runs sync.sync_now() on a worker thread - it's a network call,
         must never block the GUI thread.
 
         Fires once at startup and reports nothing: sync is opt-in (it
         no-ops entirely without GITHUB_PAT) and a popup on every launch
         would be noise. Failures are swallowed for the same reason they
-        always were — sync must never take a lookup down with it."""
+        always were - sync must never take a lookup down with it."""
         def worker():
             try:
                 from . import sync
@@ -325,7 +325,7 @@ class App:
 
 def main():
     # Single-instance guard: with both an autostart shortcut and a desktop
-    # shortcut, double-launching is easy — two instances would mean two
+    # shortcut, double-launching is easy - two instances would mean two
     # hooks and doubled popups. QLockFile auto-detects stale locks from
     # crashed processes, so a crash never bricks future launches.
     app = QApplication([])

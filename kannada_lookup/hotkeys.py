@@ -1,6 +1,6 @@
 """Shortcut strings: parse, normalise, and flag the dangerous ones.
 
-Shortcuts are stored the way Qt writes them — "Ctrl+Alt+G" — because the
+Shortcuts are stored the way Qt writes them - "Ctrl+Alt+G" - because the
 recorder in setup_dialog.py is a QKeySequenceEdit and that is its native
 portable format. This module turns that string into something the OS hook
 can match against, and warns about bindings that would hurt.
@@ -57,7 +57,7 @@ class Combo(NamedTuple):
     def pynput_text(self) -> str:
         """pynput GlobalHotKeys syntax, e.g. "<ctrl>+<alt>+g".
 
-        Only the Linux backend needs this — it cannot suppress on X11 and
+        Only the Linux backend needs this - it cannot suppress on X11 and
         so falls back to GlobalHotKeys instead of a filtering hook.
         """
         parts = []
@@ -79,7 +79,7 @@ def parse(text: str) -> Combo | None:
 
     Rejects: empty input, modifier-only chords (no key to trigger on), and
     keys we have no virtual-key code for. Returning None rather than
-    raising keeps callers simple — an unusable stored shortcut just means
+    raising keeps callers simple - an unusable stored shortcut just means
     "no keyboard trigger", never a crash on startup.
     """
     if not text or not text.strip():
@@ -107,7 +107,7 @@ def parse(text: str) -> Combo | None:
         elif name in ("META", "WIN"):
             meta = True
         else:
-            return None  # unknown modifier — refuse rather than guess
+            return None  # unknown modifier - refuse rather than guess
 
     key = key_token.strip()
     if not key or key.upper() in _MODIFIER_NAMES:
@@ -197,9 +197,9 @@ def risk_warning(text: str, suppressed: bool = True) -> str | None:
     """Human-readable reason this shortcut is a bad idea, or None.
 
     Where the hook swallows the chord (`suppressed=True`), an app collision
-    is mostly theoretical. Where it doesn't — X11 can't intercept at all,
+    is mostly theoretical. Where it doesn't - X11 can't intercept at all,
     and suppression can be missed during a focus change even where it's
-    normally supported — the chord also reaches the app, so the warning
+    normally supported - the chord also reaches the app, so the warning
     says that instead of offering false reassurance.
     """
     combo = parse(text)

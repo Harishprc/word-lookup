@@ -3,7 +3,7 @@
 Everything here is deliberately free of Qt, pynput and win32: the parsing,
 validation and persistence can all be exercised without a display or an
 installed hook. The one thing that genuinely cannot be unit-tested is
-whether the OS hook actually swallows the chord — that needs a real
+whether the OS hook actually swallows the chord - that needs a real
 keypress in a real app (see README / the Word check).
 """
 
@@ -42,7 +42,7 @@ def test_parse_resolves_virtual_key(text, expected_vk):
         "Ctrl",              # modifier-only: nothing to trigger on
         "Ctrl+Shift",
         "Ctrl+Alt+Zz",       # not a real key
-        "Hyper+G",           # unknown modifier — refuse rather than guess
+        "Hyper+G",           # unknown modifier - refuse rather than guess
     ],
 )
 def test_parse_rejects_unusable(text):
@@ -114,7 +114,7 @@ def test_from_pynput_upgrades_v010_env_values():
         ("Ctrl+Q", "quits"),
         ("Alt+F4", "closes the active window"),
         ("Ctrl+Alt+D", "endnote"),        # Word collision
-        ("Ctrl+Alt+K", "AutoFormat"),     # Word collision — the v0.1.0 default
+        ("Ctrl+Alt+K", "AutoFormat"),     # Word collision - the v0.1.0 default
         ("Meta+G", "Windows reserves"),
         ("G", "typing normally"),         # no modifier at all
     ],
@@ -182,7 +182,7 @@ def test_update_settings_none_leaves_field_alone(monkeypatch, tmp_path):
 
 def test_lookup_hotkey_defaults_to_empty(monkeypatch, tmp_path):
     """An existing install must keep working as mouse-only until the user
-    opts in — no shortcut appears out of nowhere on upgrade."""
+    opts in - no shortcut appears out of nowhere on upgrade."""
     from kannada_lookup import config
 
     monkeypatch.setattr(config, "SETTINGS_PATH", tmp_path / "settings.json")

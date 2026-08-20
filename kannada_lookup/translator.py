@@ -1,6 +1,6 @@
 """Provider-agnostic translation backend.
 
-Default provider: GeminiProvider — Gemini API with a Google AI Studio key.
+Default provider: GeminiProvider - Gemini API with a Google AI Studio key.
 An LLM provider returns meaning AND an example sentence, matching the
 original Apple-Dictionary-style spec. Swap providers via PROVIDER in .env,
 zero code changes at call sites (GoogleTranslateProvider kept as fallback;
@@ -10,13 +10,13 @@ COST NOTE (Gemini via AI Studio key):
   - Free tier, permanent, no credit card. The allowance depends on the
     model: flash-lite class (the default) is the most generous
     (~1,500/day) and, measured against the real API, 2-4x faster per
-    lookup than plain flash class — the latter isn't just cheaper on
+    lookup than plain flash class - the latter isn't just cheaper on
     quota, it's the difference between a 3s popup and one that
     occasionally times out. Ample either way for reading, since repeats
     are served from cache; a bulk pass over the whole cache is what
     actually trips the per-minute limit (see
     scripts/backfill_native_synonyms.py).
-  - Caveat: Google may use free-tier prompts to improve its models —
+  - Caveat: Google may use free-tier prompts to improve its models -
     fine for single-word lookups, don't send anything sensitive.
 
 COST NOTE (Google Cloud Translation, legacy fallback):
@@ -38,7 +38,7 @@ from . import config, languages
 class LookupResult:
     """One dictionary-card entry. Only `original` and `translation` are
     guaranteed; the English fields come from LLM providers and stay empty
-    on plain-translation providers — the popup hides empty rows."""
+    on plain-translation providers - the popup hides empty rows."""
 
     original: str
     translation: str          # target-language translation
@@ -62,8 +62,8 @@ class MalformedReply(LookupFailed):
 
     A LookupFailed subclass so every existing `except LookupFailed`
     handler and user-facing message path is unchanged, but distinguishable
-    internally: unlike a bad key or exhausted quota, this is transient —
-    the same request usually succeeds on an immediate second attempt — so
+    internally: unlike a bad key or exhausted quota, this is transient -
+    the same request usually succeeds on an immediate second attempt - so
     _request retries once on it, exactly like a 5xx.
     """
 
@@ -74,7 +74,7 @@ class TranslationProvider(ABC):
 
 
 class GeminiProvider(TranslationProvider):
-    """Gemini API (AI Studio key) — full dictionary card in one call."""
+    """Gemini API (AI Studio key) - full dictionary card in one call."""
 
     ENDPOINT = (
         "https://generativelanguage.googleapis.com/v1beta/models/"
@@ -83,7 +83,7 @@ class GeminiProvider(TranslationProvider):
 
     # The translation rules exist because weaker models invent
     # plausible-looking words in low-resource scripts: asking for
-    # "restricted" in Kannada produced "ಮಿಚ್ಛಿತ / ನಿಯನ್ಶ್ರಿತ" — neither is a
+    # "restricted" in Kannada produced "ಮಿಚ್ಛಿತ / ನಿಯನ್ಶ್ರಿತ" - neither is a
     # real word, and the second is a malformed consonant cluster that
     # renders with a dotted circle (the Unicode orphaned-combining-mark
     # marker). Naming the failure modes explicitly is what suppresses them.
@@ -150,7 +150,7 @@ class GeminiProvider(TranslationProvider):
         common path is one request and nothing here fires. Reliability is
         the backstop: on a wrong-script reply this retries the fast model
         once (naming the mistake), and only if THAT also fails does it
-        escalate to GEMINI_FALLBACK_MODEL — measured 2-4x slower, but paid
+        escalate to GEMINI_FALLBACK_MODEL - measured 2-4x slower, but paid
         for the handful of words that actually need it rather than on
         every lookup.
 
@@ -165,7 +165,7 @@ class GeminiProvider(TranslationProvider):
             return result
 
         # Wrong script is unambiguous and cheap to detect, and a wrong-script
-        # card is useless — the reader cannot even read it. Retry once with
+        # card is useless - the reader cannot even read it. Retry once with
         # the mistake spelled out rather than caching the bad answer.
         retry_prompt = self._RETRY_SUFFIX.format(language=self._language)
         retried = self._request(text, extra=retry_prompt)
@@ -190,7 +190,7 @@ class GeminiProvider(TranslationProvider):
 
         # Still wrong: fail loudly instead of returning something unreadable.
         # Raising also keeps it out of the cache, which is keyed by word only
-        # — a bad entry stored here would be served forever.
+        # - a bad entry stored here would be served forever.
         raise LookupFailed(
             f"Model answered in the wrong script for {self._language}. "
             "Try again, or switch GEMINI_MODEL in .env."
@@ -213,7 +213,7 @@ class GeminiProvider(TranslationProvider):
         not a guarantee, so this backstops it in code. ONLY the English
         fields are copied: the earlier reply was rejected for being in the
         wrong script, so its translation, example_native and
-        synonyms_native are exactly the values that must not be reused —
+        synonyms_native are exactly the values that must not be reused -
         while its meaning and English example were never in question.
         """
         patch = {
@@ -227,7 +227,7 @@ class GeminiProvider(TranslationProvider):
     def _request(
         self, text: str, extra: str = "", model: str = "", _retrying: bool = False
     ) -> LookupResult:
-        """`model` overrides the configured one for a single call — used
+        """`model` overrides the configured one for a single call - used
         only by lookup()'s fallback escalation, so the slower model is
         paid for exactly the words that need it.
 
@@ -245,7 +245,7 @@ class GeminiProvider(TranslationProvider):
                             "parts": [{"text": prompt}],
                         }
                     ],
-                    # Forces raw JSON output — no prose, no markdown fences
+                    # Forces raw JSON output - no prose, no markdown fences
                     # (fences still stripped below, belt and suspenders).
                     "generationConfig": {"responseMimeType": "application/json"},
                 },
@@ -274,7 +274,7 @@ class GeminiProvider(TranslationProvider):
                 "Rate limit or daily quota hit. Wait a minute and try again."
             )
         if resp.status_code == 404:
-            # Names the model actually called, not self._model — on a
+            # Names the model actually called, not self._model - on a
             # fallback escalation those differ, and reporting the wrong
             # one sends the user to edit a setting that was never at fault.
             raise LookupFailed(
@@ -282,7 +282,7 @@ class GeminiProvider(TranslationProvider):
                 "in .env (e.g. gemini-2.0-flash)."
             )
         if resp.status_code in (500, 502, 503, 504):
-            # Google's side is transiently overloaded — nothing about the
+            # Google's side is transiently overloaded - nothing about the
             # request is wrong, so one immediate retry usually lands.
             # Observed a 503 sink an otherwise-good fallback escalation.
             # Guarded by `not _retrying` so this can never recurse further
@@ -296,7 +296,7 @@ class GeminiProvider(TranslationProvider):
         if not resp.ok:
             raise LookupFailed(f"Gemini API error {resp.status_code}.")
 
-        # A garbled reply is as transient as a 5xx — the model simply
+        # A garbled reply is as transient as a 5xx - the model simply
         # produced non-JSON that once, and asking again usually works.
         # Observed "ephemeral" fail this way on an otherwise-healthy run.
         # Same single-retry guard, so a persistently broken reply still
@@ -432,7 +432,7 @@ class CachedProvider(TranslationProvider):
 
 
 def make_provider() -> TranslationProvider:
-    """Factory keyed on PROVIDER from .env — the provider swap point."""
+    """Factory keyed on PROVIDER from .env - the provider swap point."""
     if config.PROVIDER == "gemini":
         inner = GeminiProvider(
             config.GEMINI_API_KEY, config.GEMINI_MODEL, config.TARGET_LANGUAGE

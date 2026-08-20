@@ -1,4 +1,4 @@
-"""Unit tests — HTTP mocked, no key/network needed."""
+"""Unit tests - HTTP mocked, no key/network needed."""
 
 import sqlite3
 import sys
@@ -170,7 +170,7 @@ def test_gemini_prompt_uses_configured_language():
 
 def test_gemini_prompt_forbids_the_known_bad_output_shapes():
     """Weak models invent words in low-resource scripts (Kannada
-    "restricted" once returned "ಮಿಚ್ಛಿತ / ನಿಯನ್ಶ್ರಿತ" — two non-words, the
+    "restricted" once returned "ಮಿಚ್ಛಿತ / ನಿಯನ್ಶ್ರಿತ" - two non-words, the
     second a malformed cluster). These constraints are what suppress that,
     so they must not be dropped."""
     with patch(
@@ -194,7 +194,7 @@ def _kannada_json(translation):
 
 
 def test_gemini_retries_once_when_the_reply_is_in_the_wrong_script():
-    """The real failure: asking for Kannada and getting Devanagari — right
+    """The real failure: asking for Kannada and getting Devanagari - right
     word, wrong alphabet, unreadable to the user. First reply is rejected,
     the retry succeeds, and only the good one is returned."""
     replies = [
@@ -215,7 +215,7 @@ def test_gemini_retries_once_when_the_reply_is_in_the_wrong_script():
 
 def test_gemini_retries_a_mixed_script_reply_too():
     """The other real failure, from flash-lite against the live API:
-    "कृतज्ञತೆ" for Kannada — four Devanagari characters and one real
+    "कृतज्ञತೆ" for Kannada - four Devanagari characters and one real
     Kannada one. Not zero correct characters like the other test, so this
     exercises the "no foreign characters" half of the check separately
     from the "has own characters" half."""
@@ -242,7 +242,7 @@ def test_gemini_does_not_retry_when_the_script_is_already_correct():
 def test_retry_keeps_english_fields_when_the_model_returns_a_sparse_reply():
     """The real bug: asked to "reply again in Kannada script", the model
     treats the translation as the whole task and returns a stripped
-    object. Observed live for "configuration" — the retry dropped
+    object. Observed live for "configuration" - the retry dropped
     example_native, and the empty value got cached, so the card showed no
     native example sentence."""
     first = _response(200, _gemini_payload(
@@ -270,7 +270,7 @@ def test_retry_keeps_english_fields_when_the_model_returns_a_sparse_reply():
 def test_retry_never_carries_over_the_rejected_native_fields():
     """The earlier reply was rejected for being in the wrong script, so
     its native-language fields are precisely the ones that must NOT be
-    reused — otherwise the fix would reintroduce the Devanagari it just
+    reused - otherwise the fix would reintroduce the Devanagari it just
     rejected."""
     first = _response(200, _gemini_payload(
         '{"translation": "दमन", "example_native": "दमन का उदाहरण।", '
@@ -324,7 +324,7 @@ def test_gemini_escalates_to_the_fallback_model_after_two_fast_failures(monkeypa
 
 
 def test_malformed_reply_is_retried_once():
-    """A garbled reply is as transient as a 5xx — the model produced
+    """A garbled reply is as transient as a 5xx - the model produced
     non-JSON that once. Observed "ephemeral" fail this way mid-run on an
     otherwise-healthy set of lookups."""
     replies = [
@@ -348,7 +348,7 @@ def test_malformed_reply_retry_does_not_recurse():
 
 def test_transient_5xx_is_retried_once():
     """Google returning 503 means its side is briefly overloaded, not that
-    the request is wrong — observed a 503 sink an otherwise-good fallback
+    the request is wrong - observed a 503 sink an otherwise-good fallback
     escalation. One immediate retry usually lands."""
     replies = [
         _response(503),
@@ -372,7 +372,7 @@ def test_transient_5xx_retry_does_not_recurse():
 
 
 def test_fallback_call_gets_a_longer_timeout(monkeypatch):
-    """The escalation model is slower by definition — holding it to the
+    """The escalation model is slower by definition - holding it to the
     fast model's ceiling timed out the very call meant to rescue the
     lookup (observed against the live API on "gratitude")."""
     monkeypatch.setattr("kannada_lookup.config.GEMINI_FALLBACK_MODEL", "strong-model")
@@ -423,7 +423,7 @@ def test_gemini_escalation_disabled_by_empty_fallback(monkeypatch):
 
 def test_gemini_reports_both_problems_when_the_fallback_itself_fails(monkeypatch):
     """A quota error on the backstop must not masquerade as the real
-    problem — the user's word still failed for a script reason, and the
+    problem - the user's word still failed for a script reason, and the
     fallback model may be one they never configured."""
     monkeypatch.setattr("kannada_lookup.config.GEMINI_FALLBACK_MODEL", "strong-model")
     bad = _response(200, _gemini_payload(_kannada_json("दमन")))
@@ -440,7 +440,7 @@ def test_gemini_reports_both_problems_when_the_fallback_itself_fails(monkeypatch
 
 
 def test_gemini_404_names_the_model_actually_called(monkeypatch):
-    """On escalation the failing model is the fallback, not GEMINI_MODEL —
+    """On escalation the failing model is the fallback, not GEMINI_MODEL -
     naming the wrong one sends the user to edit a setting that was fine."""
     monkeypatch.setattr("kannada_lookup.config.GEMINI_FALLBACK_MODEL", "strong-model")
     bad = _response(200, _gemini_payload(_kannada_json("दमन")))
@@ -455,7 +455,7 @@ def test_gemini_404_names_the_model_actually_called(monkeypatch):
 
 def test_gemini_raises_when_every_attempt_is_wrong_script(monkeypatch):
     """Failing loudly keeps the bad answer out of the cache, which is keyed
-    by word with no model in the key — a stored wrong-script row would be
+    by word with no model in the key - a stored wrong-script row would be
     served forever. Three bad replies now, not two: the fast model gets
     two attempts and the fallback model one before this gives up."""
     monkeypatch.setattr("kannada_lookup.config.GEMINI_FALLBACK_MODEL", "strong-model")
@@ -470,7 +470,7 @@ def test_gemini_raises_when_every_attempt_is_wrong_script(monkeypatch):
 
 def test_gemini_latin_target_never_triggers_the_script_retry():
     """Swedish shares the ASCII range with English, so there is nothing to
-    check — a Latin answer must not be mistaken for a wrong-script reply."""
+    check - a Latin answer must not be mistaken for a wrong-script reply."""
     payload = _response(
         200, _gemini_payload('{"translation": "svar", "meaning": "a reply"}')
     )
@@ -660,7 +660,7 @@ def test_cached_provider_miss_then_hit(tmp_path, kannada_lang):
     inner = _FakeProvider()
     p = CachedProvider(inner, LookupStore(tmp_path / "t.db"))
     first = p.lookup("Strength")
-    second = p.lookup("strength")  # different case — same cache entry
+    second = p.lookup("strength")  # different case - same cache entry
     assert first == second == _RESULT
     assert inner.calls == 1  # API touched exactly once
 
@@ -732,8 +732,8 @@ def test_register_generation(tmp_path):
 
 def test_register_reflects_a_lookup_added_after_the_first_generation(tmp_path):
     """The reported bug was "register not updating after lookups". The file
-    itself was always correct — the browser was re-serving a cached copy of
-    an unchanging file:// URL — but pin the regeneration behaviour anyway,
+    itself was always correct - the browser was re-serving a cached copy of
+    an unchanging file:// URL - but pin the regeneration behaviour anyway,
     since that is the half this module is responsible for."""
     store = LookupStore(tmp_path / "t.db")
     out = tmp_path / "r.html"
@@ -785,7 +785,7 @@ def test_register_page_forbids_caching(tmp_path):
 def test_register_default_path_is_unique_per_call(tmp_path, monkeypatch):
     """The actual bug: Windows resolves a file:// URL for a locally-
     associated .html extension through the file-type handler, which
-    launches the browser as `browser.exe --single-argument <path>` —
+    launches the browser as `browser.exe --single-argument <path>` -
     the URL wrapper is dropped, query string included. A constant
     filename was therefore byte-identical on every open regardless of
     any URL trick, and the browser kept its cached render. Only a path
@@ -808,7 +808,7 @@ def test_register_never_reuses_a_filename(tmp_path, monkeypatch):
 
     Two calls can land in the same millisecond, and because _clean_stale
     deletes the previous file, an exists()-based check would hand out an
-    earlier name again — while the browser may still hold that very name
+    earlier name again - while the browser may still hold that very name
     cached, which is the failure this whole scheme exists to prevent.
     """
     monkeypatch.setattr(register, "OUT_DIR", tmp_path)
@@ -838,7 +838,7 @@ def test_register_cleans_up_earlier_files(tmp_path, monkeypatch):
 def test_register_cleanup_ignores_a_locked_file(tmp_path, monkeypatch):
     """A previous register page can still be open in a browser tab, which
     can hold the file locked on Windows. That must not crash the next
-    "Open word register" click — the old file is just left for next time."""
+    "Open word register" click - the old file is just left for next time."""
     monkeypatch.setattr(register, "OUT_DIR", tmp_path)
     store = LookupStore(tmp_path / "t.db")
     store.put(_RESULT, "Kannada", provider="test")
@@ -860,11 +860,11 @@ def test_generate_and_open_opens_a_raw_path_not_a_uri(tmp_path, monkeypatch):
     """Pins the actual fix. Reproduced live on a real machine:
     QDesktopServices.openUrl(QUrl.fromLocalFile(path)) reported success but
     opened nothing, and feeding the SAME file:// string to plain
-    os.startfile() also opened nothing — so a file:// URI is unreliable on
+    os.startfile() also opened nothing - so a file:// URI is unreliable on
     Windows independent of Qt. os.startfile() on the bare path worked
     every time. webbrowser.open() calls os.startfile() with whatever
     string it's given, so the only thing that matters here is that the
-    string reaching it is a plain path — never something built with
+    string reaching it is a plain path - never something built with
     QUrl.fromLocalFile or pathlib's .as_uri()."""
     monkeypatch.setattr(register, "OUT_DIR", tmp_path)
     opened = {}
@@ -916,7 +916,7 @@ def test_settings_roundtrip(monkeypatch, tmp_path):
         assert config.TARGET_LANG == "hi"
         assert config.LANGUAGE_GLYPH == "अ"
     finally:
-        # save_settings mutates module globals — restore from the real
+        # save_settings mutates module globals - restore from the real
         # settings file so later tests aren't polluted.
         monkeypatch.undo()
         config.refresh_language()

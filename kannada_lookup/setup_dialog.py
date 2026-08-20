@@ -5,7 +5,7 @@ after the multi-language update). The key field only appears when .env has
 no GEMINI_API_KEY, so existing users just pick their language once.
 
 The shortcut rows are also reachable later from the tray menu, because an
-existing install never sees the first-run dialog again — see
+existing install never sees the first-run dialog again - see
 ShortcutDialog at the bottom.
 """
 
@@ -31,7 +31,7 @@ from .platforms import backend
 class ShortcutRow:
     """A labelled QKeySequenceEdit plus Clear button and warning line.
 
-    QKeySequenceEdit is Qt's own shortcut recorder — it captures the next
+    QKeySequenceEdit is Qt's own shortcut recorder - it captures the next
     chord the user presses and renders it properly. Hand-rolling key
     capture here would be strictly worse.
     """
@@ -85,7 +85,7 @@ class ShortcutRow:
 
 
 def _suppression_note(layout):
-    """On X11 the chord also reaches the focused app — say so up front
+    """On X11 the chord also reaches the focused app - say so up front
     rather than letting people discover it by breaking something."""
     if getattr(backend, "SUPPRESSES_HOTKEY", True):
         return
@@ -158,7 +158,7 @@ class ShortcutDialog(QDialog):
     """Just the shortcut rows, opened from the tray menu.
 
     Exists because SetupDialog only ever appears once. Without this an
-    existing install — anyone who upgraded from v0.1.0 — would have no way
+    existing install - anyone who upgraded from v0.1.0 - would have no way
     to set a keyboard shortcut at all.
     """
 

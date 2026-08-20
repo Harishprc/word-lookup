@@ -73,7 +73,7 @@ jobs:
       # them: it proves the file they got is the file this workflow built
       # from this tag, unmodified in transit or on the release page.
       #
-      # Note it does NOT let anyone reproduce the build locally — PyInstaller
+      # Note it does NOT let anyone reproduce the build locally - PyInstaller
       # embeds timestamps and build paths, so two builds of identical source
       # differ. This attests the artifact, not the build.
       - name: Compute SHA256
@@ -102,6 +102,6 @@ jobs:
             Get-FileHash .\WordLookup.exe -Algorithm SHA256
             ```
 
-            Windows will warn that this file "isn't commonly downloaded" —
+            Windows will warn that this file "isn't commonly downloaded" -
             the build is unsigned, which is a reputation warning, not a
             malware detection. See the README's Install section.
